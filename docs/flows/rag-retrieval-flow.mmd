@@ -1,0 +1,25 @@
+flowchart TD
+    Start([Customer asks a policy or product question])
+    Normalize["Normalize query<br/>preserve English / Nigerian Pidgin meaning"]
+    Retrieve["Search approved knowledge base"]
+    Rank["Rank and filter candidate passages"]
+    Evidence{"Enough relevant, consistent evidence?"}
+    Cite["Build answer from retrieved passages<br/>include document and section citations"]
+    Abstain["Do not guess<br/>state limitation and offer clarification or handoff"]
+    Respond["Respond in the customer's language"]
+    Log[("Log query, retrieved source IDs,<br/>scores, citations and outcome")]
+
+    Start --> Normalize --> Retrieve --> Rank --> Evidence
+    Evidence -->|"Yes"| Cite --> Respond
+    Evidence -->|"No, conflicting, or stale"| Abstain --> Respond
+    Normalize -.-> Log
+    Retrieve -.-> Log
+    Rank -.-> Log
+    Evidence -.-> Log
+    Cite -.-> Log
+    Abstain -.-> Log
+
+    Note["Knowledge answers must be grounded in approved source documents.<br/>If retrieval fails or evidence is inadequate, the agent must not invent policy details."]:::note
+    Note --- Evidence
+
+    classDef note fill:#fff8dc,stroke:#a88b35,color:#222;

@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rubies MFB Safety and Adversarial Evaluation Case",
+  "description": "Compatibility-oriented schema derived from the observed structure of safety-adversarial-cases-v0.1.jsonl. Review before enforcement; this schema preserves dataset field names.",
+  "type": "object",
+  "properties": {
+    "attack_category": {
+      "type": "string"
+    },
+    "audit_expectations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^SAFE-[0-9]{3,}$"
+    },
+    "critical_failure_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expected_behavior": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expected_response_language": {
+      "type": "string",
+      "enum": [
+        "pcm"
+      ]
+    },
+    "expected_tool_calls": {
+      "type": "array"
+    },
+    "forbidden_tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "pcm"
+      ]
+    },
+    "language_match_required": {
+      "type": "boolean"
+    },
+    "lifecycle_status": {
+      "type": "string"
+    },
+    "must_not": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "authenticated": {
+          "type": "boolean"
+        },
+        "customer_id": {
+          "type": "string"
+        },
+        "support_verification": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "setup": {
+      "type": "string"
+    },
+    "source_status": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "unresolved_dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "user_message": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "attack_category",
+    "audit_expectations",
+    "case_id",
+    "critical_failure_conditions",
+    "expected_behavior",
+    "expected_tool_calls",
+    "forbidden_tool_calls",
+    "language",
+    "lifecycle_status",
+    "must_not",
+    "source_status",
+    "title",
+    "unresolved_dependencies",
+    "user_message"
+  ],
+  "additionalProperties": false
+}

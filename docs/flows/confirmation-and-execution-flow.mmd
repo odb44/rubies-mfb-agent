@@ -1,0 +1,54 @@
+flowchart TD
+    Start[Agent proposes a state-changing action] --> ValidateProposal[Validate action type and input schema]
+    ValidateProposal --> ProposalValid{Proposal valid?}
+    ProposalValid -->|No| RejectProposal[Reject proposal; no state change]
+    ProposalValid -->|Yes| Authz[Banking backend derives customer identity from trusted session]
+    Authz --> Checks[Check session, customer ownership, permissions and required verification]
+    Checks --> Authorized{Authorized and verified?}
+    Authorized -->|No| Deny[Reject action safely; audit denial]
+    Authorized -->|Yes| Summarize[Build a human-readable summary of the exact proposed action]
+    Summarize --> Persist[Persist pending action with customer/session binding, action details, creation time, expiry and status]
+    Persist --> AuditPending[Audit confirmation requested]
+    AuditPending --> Ask[Return confirmation_id and show action summary; ask for explicit confirmation]
+    Ask --> Wait[Return awaiting_confirmation; do not execute action]
+
+    Wait --> Followup[Customer sends a later message]
+    Followup --> Resolve[Resolve pending action using confirmation_id when supplied, otherwise trusted session context]
+    Resolve --> Match{Explicit confirmation identifies and matches one pending action?}
+    Match -->|No / ambiguous / decline| NoExecute[Do not execute; clarify or cancel pending action]
+    NoExecute --> RecordNo[Record decline, ambiguity or cancellation]
+    RecordNo --> EndNo[Return outcome to customer]
+
+    Match -->|Yes| StateCheck[Load pending action and current security state]
+    StateCheck --> Valid{Pending, unexpired, unused and correctly bound?}
+    Valid -->|No| Expired[Reject confirmation; explain that a new request may be needed]
+    Expired --> AuditInvalid[Audit invalid, expired or replayed confirmation]
+    AuditInvalid --> EndInvalid[Return safe outcome]
+
+    Valid --> Reauthorize[Recheck customer identity, ownership, permissions and verification]
+    Reauthorize --> StillAllowed{Still authorized and valid?}
+    StillAllowed -->|No| Deny
+    StillAllowed -->|Yes| Consume[Atomically mark confirmation as consumed / execution-in-progress]
+    Consume --> Idempotency[Use stable idempotency key for this pending action]
+    Idempotency --> Execute[Execute operation through the Banking API]
+    Execute --> Outcome{Definitive result received?}
+    Outcome -->|Success| Success[Persist successful result]
+    Outcome -->|Definitive failure| Failure[Persist failed result and safe error]
+    Outcome -->|Timeout / unknown| Unknown[Persist outcome as unknown; do not blindly retry]
+    Success --> AuditResult[Write audit record with action ID, actor, tool, outcome and correlation ID]
+    Failure --> AuditResult
+    Unknown --> Reconcile[Query operation status or reconcile with source of truth]
+    Reconcile --> Reconciled{Outcome resolved?}
+    Reconciled -->|Yes| Finalize[Persist reconciled outcome]
+    Reconciled -->|No| Escalate[Keep outcome marked unknown; hand off for human review]
+    Finalize --> AuditResult
+    Escalate --> AuditResult
+    AuditResult --> Respond[Return outcome to agent for customer-facing response]
+    Respond --> End[Agent explains result without overstating certainty]
+
+    classDef security fill:#fff2cc,stroke:#9a6700,color:#222;
+    classDef persistence fill:#d9ead3,stroke:#38761d,color:#222;
+    classDef decision fill:#d9eaf7,stroke:#134f5c,color:#222;
+    class Authz,Checks,Reauthorize,Consume security;
+    class Persist,AuditPending,RecordNo,AuditInvalid,Success,Failure,Unknown,Finalize,AuditResult persistence;
+    class ProposalValid,Authorized,Match,Valid,StillAllowed,Outcome,Reconciled decision;

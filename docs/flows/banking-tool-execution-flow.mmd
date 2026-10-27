@@ -1,0 +1,76 @@
+sequenceDiagram
+    autonumber
+    actor Customer
+    participant Agent as Agent Orchestrator
+    participant Router as Tool Router
+    participant Security as Identity and Permission Checks
+    participant Confirm as Confirmation Manager
+    participant Banking as Banking API
+    participant DB as PostgreSQL
+    participant Audit as Audit Logging
+
+    Customer->>Agent: Request account-specific operation
+    Agent->>Router: Propose approved tool and validated arguments
+    Router->>Security: Authorize tool for trusted customer context
+    Note over Router,Security: Customer identity is derived from trusted authentication/session context, never from model-supplied customer IDs.
+
+    alt Identity or permission check fails
+        Security-->>Router: Deny
+        Router->>Audit: Record denied tool call and redacted inputs
+        Router-->>Agent: Authorization failure
+        Agent-->>Customer: Explain limitation or offer human handoff
+    else Authorization succeeds
+        Security-->>Router: Permit tool invocation
+        Router->>Router: Validate schema, required fields, and action risk
+
+        alt Read-only operation
+            Router->>Banking: Invoke approved read operation with trusted identity
+            Banking->>DB: Read authorized banking records
+            DB-->>Banking: Records or no matching result
+            Banking-->>Router: Result or explicit not-found response
+            Router->>Audit: Record tool name, redacted inputs, result status
+            Router-->>Agent: Structured result
+            Agent->>Agent: Interpret result without inventing missing facts
+            Agent-->>Customer: Answer or explain that information is unavailable
+        else Consequential operation requiring confirmation
+            Router->>Confirm: Request or validate pending confirmation
+            Confirm->>DB: Load or create action-bound pending confirmation
+            DB-->>Confirm: Confirmation state
+
+            alt No valid confirmation exists
+                Confirm->>Audit: Record confirmation request
+                Confirm-->>Router: Confirmation required; no execution
+                Router->>Audit: Record tool call outcome
+                Router-->>Agent: Pending confirmation details
+                Agent-->>Customer: Summarize exact action and ask for explicit approval
+            else Confirmation is valid, unexpired, and unused
+                Confirm-->>Router: One-time approval for bound action
+                Router->>Banking: Execute approved operation with idempotency key
+                Banking->>DB: Recheck authorization and apply transactional state change
+                alt Operation succeeds
+                    DB-->>Banking: Commit result
+                    Banking->>DB: Persist operation audit record
+                    Banking-->>Router: Success with operation reference
+                else Operation is rejected
+                    DB-->>Banking: No successful state change
+                    Banking->>DB: Persist rejection/audit outcome
+                    Banking-->>Router: Explicit failure
+                else Outcome is unknown (for example, timeout)
+                    Banking-->>Router: Outcome unresolved
+                    Note over Banking,DB: Reconcile by operation reference/idempotency key before retrying or claiming success/failure.
+                end
+                Router->>Audit: Record final or unresolved tool outcome
+                Router-->>Agent: Structured outcome
+                Agent->>Agent: Ensure response matches authoritative outcome
+                Agent-->>Customer: Report confirmed result or explain unresolved status
+            end
+        else Tool input is invalid
+            Router->>Audit: Record validation failure with redacted inputs
+            Router-->>Agent: Validation error; operation not executed
+            Agent-->>Customer: Ask for missing or corrected information
+        end
+    end
+
+    Note over Agent,DB: The model proposes actions; backend services enforce identity, permissions, confirmation, and execution.
+    Note over Confirm,DB: Pending confirmations are persistent, action-bound, expiring, single-use, and auditable.
+    Note over Audit: Every tool call is logged with tool name, redacted inputs, result/status, and correlation context.

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rubies MFB Banking Tool Evaluation Scenario",
+  "description": "Compatibility-oriented schema derived from the observed structure of tool-scenarios-v0.1.jsonl. Review before enforcement; this schema preserves dataset field names.",
+  "type": "object",
+  "properties": {
+    "audit_expectations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "critical_failure_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "customer_session": {
+      "type": "object",
+      "properties": {
+        "authenticated": {
+          "type": "boolean"
+        },
+        "customer_id": {
+          "type": "string"
+        },
+        "support_verification": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "expected_behavior": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expected_tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "tool"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "forbidden_tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "pcm"
+      ]
+    },
+    "lifecycle_status": {
+      "type": "string"
+    },
+    "must_not": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "required_confirmation_sequence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "scenario_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "setup": {
+      "type": "string"
+    },
+    "source_status": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "unresolved_dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "user_message": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "audit_expectations",
+    "critical_failure_conditions",
+    "customer_session",
+    "expected_behavior",
+    "expected_tool_calls",
+    "forbidden_tool_calls",
+    "language",
+    "lifecycle_status",
+    "must_not",
+    "scenario_id",
+    "setup",
+    "source_status",
+    "title",
+    "unresolved_dependencies",
+    "user_message"
+  ],
+  "additionalProperties": false
+}

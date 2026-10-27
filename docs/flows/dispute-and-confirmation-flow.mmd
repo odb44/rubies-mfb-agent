@@ -1,0 +1,121 @@
+sequenceDiagram
+    autonumber
+    actor Customer
+    participant Agent as Agent Orchestrator
+    participant Router as Tool Router
+    participant Verify as Identity and Permission Checks
+    participant Confirm as Confirmation Manager
+    participant Banking as Banking API
+    participant DB as PostgreSQL
+    participant Audit as Audit Logging
+    participant Handoff as Human Handoff
+
+    Customer->>Agent: Report an unauthorized, failed, or duplicate transaction
+    Agent->>Agent: Clarify the issue and collect only required details
+    Agent->>Router: Propose transaction-status lookup
+    Router->>Verify: Authorize lookup for trusted customer context
+    alt Lookup is not authorized
+        Verify-->>Router: Deny
+        Router->>Audit: Log denied tool call with redacted inputs
+        Router-->>Agent: Authorization failure
+        Agent-->>Customer: Explain limitation or offer human support
+    else Lookup is authorized
+        Verify-->>Router: Permit
+        Router->>Banking: Get transaction status using trusted identity and reference
+        Banking->>DB: Read authorized transaction record
+        DB-->>Banking: Status, matching record, or not found
+        Banking-->>Router: Structured lookup result
+        Router->>Audit: Log tool call and result status
+        Router-->>Agent: Transaction status
+
+        alt Transaction cannot be found or evidence is insufficient
+            Agent-->>Customer: Explain that status cannot be confirmed; do not guess
+            opt Customer needs further investigation
+                Agent->>Handoff: Request human review with concise summary
+                Handoff->>Audit: Record handoff event
+                Handoff-->>Agent: Handoff status/reference
+                Agent-->>Customer: Provide handoff status or reference
+            end
+        else Transaction appears failed, pending, or duplicated
+            Agent->>Agent: Explain observed status and applicable policy evidence
+            Agent-->>Customer: Summarize issue and propose opening a dispute
+            Agent->>Router: Prepare open_dispute proposal with transaction reference and issue details
+            Router->>Verify: Validate trusted identity, permissions, and required verification
+
+            alt Authorization or validation fails
+                Verify-->>Router: Deny or return validation errors
+                Router->>Audit: Record denied/invalid dispute proposal
+                Router-->>Agent: No pending action created
+                Agent-->>Customer: Explain limitation or request missing information
+            else Authorization and validation succeed
+                Verify-->>Router: Permit
+                Router->>Confirm: Persist pending dispute action bound to customer/session and exact details
+                Confirm->>DB: Store pending action, expiry, and stable idempotency key
+                DB-->>Confirm: Persisted confirmation_id
+                Confirm-->>Router: confirmation_id and exact action summary
+                Router->>Audit: Record pending action creation
+                Router-->>Agent: Pending dispute; not executed
+                Agent-->>Customer: Show dispute summary and confirmation_id; ask for explicit approval
+                Customer->>Agent: Approve or decline the identified pending dispute
+
+                alt Customer declines or does not clearly approve
+                    Agent->>Confirm: Resolve pending action as declined or leave pending if ambiguous
+                    Confirm->>DB: Persist decline when explicit; otherwise preserve pending state
+                    Agent->>Audit: Record decline/ambiguous response; no execution
+                    Agent-->>Customer: Confirm no dispute was created, or ask for clear confirmation
+                else Customer explicitly approves
+                    Agent->>Router: Submit confirmation_id with trusted session context
+                    Router->>Verify: Recheck current identity, verification, and permissions
+                    Verify-->>Router: Permit or deny
+
+                    alt Current authorization fails
+                        Router->>Confirm: Do not consume for execution; reject approval
+                        Router->>Audit: Record authorization failure
+                        Router-->>Agent: No dispute created
+                        Agent-->>Customer: Explain limitation or offer human support
+                    else Current authorization succeeds
+                        Router->>Confirm: Validate action match, expiry, binding, and unused state; atomically consume
+                        Confirm->>DB: Atomically transition pending action to execution-in-progress
+                        DB-->>Confirm: Valid one-time approval or invalid/expired/used
+                        alt Confirmation invalid, expired, or already used
+                            Confirm-->>Router: Reject execution
+                            Router->>Audit: Record confirmation failure
+                            Router-->>Agent: No dispute created
+                            Agent-->>Customer: Request a fresh dispute proposal/confirmation if appropriate
+                        else Confirmation valid
+                            Confirm-->>Router: One-time approval and stable idempotency key
+                            Router->>Banking: Open dispute with idempotency key and trusted identity
+                            Banking->>DB: Create dispute and audit data transactionally
+                            alt Dispute created
+                                DB-->>Banking: Commit dispute reference
+                                Banking-->>Router: Success with dispute reference
+                                Router->>Audit: Record successful tool call
+                                Router-->>Agent: Dispute reference and status
+                                Agent-->>Customer: Confirm dispute creation and provide reference
+                            else Creation rejected
+                                DB-->>Banking: No successful dispute creation
+                                Banking-->>Router: Explicit failure
+                                Router->>Audit: Record failure
+                                Router-->>Agent: Failure details
+                                Agent-->>Customer: Explain failure without claiming a dispute exists
+                            else Outcome is unknown
+                                Banking-->>Router: Unresolved outcome
+                                Note over Banking,DB: Reconcile using the idempotency key or operation reference before retrying or claiming the dispute was or was not created.
+                                Router->>Audit: Record unresolved outcome
+                                Router-->>Agent: Outcome unresolved
+                                Agent->>Handoff: Request investigation if needed
+                                Handoff-->>Agent: Handoff status/reference
+                                Agent-->>Customer: Explain that creation is unconfirmed and provide the next step
+                            end
+                        end
+                    end
+                end
+            end
+        else Transaction is confirmed successful and no duplicate evidence is found
+            Agent-->>Customer: Explain the verified status and relevant policy; do not promise a reversal
+        end
+    end
+
+    Note over Agent,DB: The pending action and confirmation_id must be persisted and shown before approval is requested. Customer confirmation is required before opening a dispute; backend authorization and confirmation checks are authoritative.
+    Note over Confirm,DB: Confirmation is bound to the exact proposed action, expires, is single-use, and is audited.
+    Note over Audit: Log every tool call with tool name, redacted inputs, result/status, and correlation context.

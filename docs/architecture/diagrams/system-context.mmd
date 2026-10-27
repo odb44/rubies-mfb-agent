@@ -1,0 +1,52 @@
+# System Context Diagram
+
+- **Status:** Accepted
+- **Version:** 0.1
+- **Repository path:** `docs/architecture/diagrams/system-context.mmd`
+- **Related artifacts:** `docs/architecture/architecture-sketch.md`, `docs/architecture/component-architecture.md`, `docs/architecture/deployment-architecture.md`, `docs/api/agent-interface.md`, `docs/api/banking-api-contract.md`, `docs/api/mcp-tool-contracts.md`
+
+## Purpose
+
+Show the system boundary and the principal external actors or systems that interact with the Rubies MFB Customer Support Agent. This is a context-level view, not an implementation or deployment diagram.
+
+```mermaid
+flowchart LR
+    Customer[Customer]
+    Support[Human Support Staff]
+    Maintainer[Project Maintainer / Evaluator]
+
+    subgraph RubiesAgent["Rubies MFB Customer Support Agent — project boundary"]
+        AgentAPI[Agent API]
+        Agent[Agent Orchestration]
+        Knowledge[Knowledge Base / RAG]
+        Banking[Banking API]
+        MCP[MCP Server]
+        Session[Conversation Session Store]
+        DB[(PostgreSQL — banking records and durable pending actions)]
+        Vector[(Local Vector Index)]
+        Model[(Versioned Local Loan Model Artifacts)]
+    end
+
+    Customer -->|Messages and confirmations| AgentAPI
+    AgentAPI --> Agent
+    Agent -->|Policy and product questions| Knowledge
+    Knowledge --> Vector
+    Agent -->|Approved tool calls| MCP
+    MCP --> Banking
+    Banking --> DB
+    AgentAPI --> Session
+    Agent -->|Eligibility assessment request| Model
+    Support <-->|Escalations and handoff outcomes| Agent
+    Maintainer -->|Configuration, evaluation and operations| RubiesAgent
+```
+
+## Boundary notes
+
+- The customer interacts through the Agent API; internal banking tools are not exposed directly to the customer.
+- The agent uses RAG for policy/product answers and the local vector index for retrieval.
+- Agent-selected banking capabilities pass through the registered MCP tools and then the Banking API.
+- PostgreSQL is the source of truth for banking records and durable pending-action state.
+- Conversation session state is separate from banking persistence and is managed through the agreed Strands File Session Manager adapter. The diagram's `Conversation Session Store` box represents that adapter/storage boundary, not S3.
+- The local loan model artifacts support eligibility assessment; they do not independently approve or disburse loans.
+- Human support is shown as an interaction endpoint. The precise ticketing or routing integration remains undecided.
+- This context diagram does not prescribe physical deployment, network topology, or final endpoint contracts.

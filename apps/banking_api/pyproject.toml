@@ -1,0 +1,32 @@
+[project]
+name = "rubies-banking-api"
+version = "0.1.0"
+description = "Banking API and business services for Rubies MFB"
+requires-python = ">=3.11"
+dependencies = [
+    "rubies-shared",
+    "rubies-security",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "sqlalchemy>=2.0,<3",
+    "psycopg[binary]>=3.2,<4",
+    "alembic>=1.14,<2",
+    "pydantic-settings>=2.6,<3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rubies_banking_api"]
+
+[tool.uv.sources]
+rubies-shared = { workspace = true }
+rubies-security = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27,<1",
+    "httpx2>=2.16.0",
+]

@@ -1,0 +1,70 @@
+flowchart TD
+    Client[Client / customer channel] -->|Message + optional session_id| API[Agent API]
+    API --> Auth[Authenticate request and establish trusted identity]
+    Auth --> SessionCheck{New or existing conversation?}
+
+    SessionCheck -->|New| CreateSession[Create conversation session]
+    SessionCheck -->|Existing| ValidateSession[Validate session and ownership]
+    ValidateSession -->|Invalid / inaccessible| Reject[Return safe error]
+    CreateSession --> LoadContext
+    ValidateSession -->|Valid| LoadContext[Load conversation state via Strands File Session Manager]
+
+    LoadContext --> AppendMessage[Append customer message to conversation]
+    AppendMessage --> Orchestrator[Agent orchestration / Strands agent]
+    Orchestrator --> Decide{What does the request require?}
+
+    Decide -->|Policy / product question| Retrieve[Retrieve relevant knowledge-base passages]
+    Retrieve --> Evidence{Sufficient, consistent evidence?}
+    Evidence -->|Yes| ComposeCited[Compose answer with document and section citations]
+    Evidence -->|No| Abstain[Explain limits; offer human handoff]
+    ComposeCited --> PersistReply
+    Abstain --> HandoffChoice{Customer wants handoff or uncertainty requires it?}
+    HandoffChoice -->|Yes| Handoff[Create handoff with concise conversation summary]
+    Handoff --> PersistReply
+    HandoffChoice -->|No| PersistReply
+
+    Decide -->|Banking operation / account-specific question| ToolProposal[Select an approved tool and validate its input schema]
+    ToolProposal --> ToolRouter[Tool router sends request to Banking API]
+    ToolRouter --> BackendChecks[Backend derives customer from trusted identity and checks ownership, permissions and verification]
+    BackendChecks --> Allowed{Authorized and sufficiently verified?}
+    Allowed -->|No| SafeDeny[Reject operation without exposing protected data]
+    SafeDeny --> PersistReply
+    Allowed -->|Yes| NeedsConfirmation{State-changing action?}
+
+    NeedsConfirmation -->|No| ExecuteRead[Execute permitted read operation]
+    ExecuteRead --> ToolAudit[Audit tool name, redacted inputs, result classification and correlation details]
+    ToolAudit --> ReturnToolResult[Return result to orchestration]
+    ReturnToolResult --> Orchestrator
+
+    NeedsConfirmation -->|Yes| CreatePending[Persist pending action bound to customer, session and exact action; set expiry and status]
+    CreatePending --> AuditPending[Audit confirmation request]
+    AuditPending --> AskConfirmation[Return action summary and confirmation_id; ask for explicit confirmation; do not execute yet]
+    AskConfirmation --> PersistReply
+
+    Decide -->|Clarification needed| AskClarification[Ask a focused clarification question]
+    AskClarification --> PersistReply
+
+    Decide -->|Human support requested / required| Handoff
+    PersistReply[Persist assistant response and updated conversation state] --> Response[Return reply, status, session_id and applicable sources]
+    Response --> Client
+
+    ConfirmLater[Customer sends confirmation with confirmation_id or unambiguous confirmation in same session] --> API
+    API -. same authenticated and session-validated entry path .-> ConfirmLookup[Resolve pending action using trusted session and confirmation context]
+    ConfirmLookup --> ConfirmValid{Pending action exists, unexpired, unused, and explicitly matches?}
+    ConfirmValid -->|No| ExplainNoExecution[Explain confirmation cannot be applied; do not execute]
+    ExplainNoExecution --> PersistReply
+    ConfirmValid -->|Yes| Recheck[Recheck identity, authorization and current action constraints]
+    Recheck --> RecheckAllowed{Still authorized?}
+    RecheckAllowed -->|No| SafeDeny
+    RecheckAllowed -->|Yes| Consume[Atomically consume confirmation and mark execution in progress]
+    Consume --> ExecuteWrite[Execute state-changing operation with idempotency / safe-retry handling]
+    ExecuteWrite --> WriteAudit[Persist outcome and audit action ID, tool, result classification and correlation details]
+    WriteAudit --> WriteResult[Return operation result to orchestration]
+    WriteResult --> Orchestrator
+
+    classDef security fill:#fff2cc,stroke:#9a6700,color:#222;
+    classDef persistence fill:#d9ead3,stroke:#38761d,color:#222;
+    classDef decision fill:#d9eaf7,stroke:#134f5c,color:#222;
+    class Auth,ValidateSession,BackendChecks,Recheck,Consume security;
+    class LoadContext,CreatePending,AuditPending,ToolAudit,WriteAudit,PersistReply persistence;
+    class SessionCheck,Decide,Evidence,Allowed,NeedsConfirmation,ConfirmValid,RecheckAllowed decision;

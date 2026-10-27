@@ -1,0 +1,44 @@
+flowchart TB
+    Customer["Customer / client"]
+    Agent["Agent API<br/>request + response"]
+    Session["Conversation/session context"]
+    Verify["Verify customer identity"]
+    Intent["Interpret request and select next action"]
+    Retrieve["Retrieve policy evidence"]
+    ToolGate["Tool policy + authorization checks"]
+    ToolCall["Execute approved tool"]
+    ResultCheck["Validate tool result"]
+    Confirm{"Does action change records,<br/>move money, or send a message?"}
+    Pending["Create pending confirmation<br/>with expiry and audit record"]
+    Approval{"Valid, matching,<br/>unused approval?"}
+    Execute["Execute confirmed action<br/>through Banking API"]
+    Respond["Build response with evidence<br/>or action outcome"]
+    Handoff["Prepare handoff summary<br/>and route to human support"]
+    Log[("Audit / tool-call log")]
+
+    Customer --> Agent --> Session --> Verify
+    Verify -->|"Not verified / identity unclear"| Respond
+    Verify -->|"Verified or permitted public query"| Intent
+    Intent -->|"Policy / product question"| Retrieve --> Respond
+    Intent -->|"Banking operation"| ToolGate
+    ToolGate -->|"Denied / unauthorized"| Respond
+    ToolGate --> ToolCall --> ResultCheck
+    ResultCheck -->|"Failure, unknown outcome,<br/>or insufficient evidence"| Respond
+    ResultCheck -->|"Action requires confirmation"| Confirm
+    Confirm -->|"Yes"| Pending --> Approval
+    Approval -->|"No: missing, expired,<br/>mismatched or already used"| Respond
+    Approval -->|"Yes"| Execute --> Respond
+    Confirm -->|"No: read-only action"| Respond
+    Intent -->|"Uncertain, upset customer,<br/>or explicit request for human"| Handoff --> Respond
+
+    Agent -.->|"Record request and response"| Log
+    ToolGate -.->|"Record decision"| Log
+    ToolCall -.->|"Record tool name, inputs,<br/>result and outcome"| Log
+    Pending -.->|"Record pending action"| Log
+    Execute -.->|"Record execution result"| Log
+    Handoff -.->|"Record escalation"| Log
+
+    Note["Logical conversation flow only. Trusted customer identity comes from the authenticated session, not model-supplied IDs.<br/>The Banking API enforces permissions and confirmation before sensitive writes."]:::note
+    Note --- ToolGate
+
+    classDef note fill:#fff8dc,stroke:#a88b35,color:#222;

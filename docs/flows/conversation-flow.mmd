@@ -1,0 +1,77 @@
+sequenceDiagram
+    autonumber
+    actor Customer
+    participant Client as Customer Channel
+    participant API as Agent API
+    participant Security as Authentication / Security
+    participant Session as Strands File Session Manager
+    participant Agent as Agent Orchestrator
+    participant Banking as Banking API
+    participant KB as Knowledge Base
+    participant Handoff as Handoff Component
+
+    Customer->>Client: Send message
+    Client->>API: POST /api/agent/chat with message and optional session_id
+    API->>Security: Authenticate request and establish trusted identity
+    Security-->>API: Trusted identity context
+
+    alt Authentication fails
+        API-->>Client: 401 authentication error
+        Client-->>Customer: Ask customer to authenticate
+    else Authentication succeeds
+        alt New conversation (session_id omitted)
+            API->>Session: Create session bound to authenticated customer
+            Session-->>API: New session_id
+        else Existing conversation
+            API->>Session: Load session and verify ownership against trusted identity
+            alt Session invalid or inaccessible
+                Session-->>API: Reject access
+                API-->>Client: Safe session-unavailable error
+                Client-->>Customer: Explain conversation is unavailable
+            else Session is valid
+                Session-->>API: Existing conversation state
+            end
+        end
+
+        opt Session is available
+            API->>Session: Append customer message and load conversation context
+            Session-->>API: Conversation context
+            API->>Agent: Process message with trusted identity and session context
+            Agent->>Agent: Classify intent and determine required path
+
+            alt Policy or product question
+                Agent->>KB: Retrieve relevant passages
+                KB-->>Agent: Passages with document and section metadata
+                Agent->>Agent: Assess evidence sufficiency and consistency
+                alt Evidence is sufficient
+                    Agent->>Agent: Compose answer with source citations
+                else Evidence is insufficient or conflicting
+                    Agent->>Agent: Abstain from guessing
+                    opt Handoff requested or appropriate
+                        Agent->>Handoff: Submit handoff request and concise summary
+                        Handoff-->>Agent: Handoff acceptance or failure
+                    end
+                end
+            else Account-specific or banking request
+                Agent->>Agent: Select approved tool and validate tool input
+                Agent->>Banking: Request operation; customer identity comes from trusted context
+                Banking-->>Agent: Result, denial, pending confirmation, or unresolved outcome
+                Note over Agent,Banking: Backend authorization and confirmation rules are authoritative.
+            else Clarification needed
+                Agent->>Agent: Prepare focused clarification question
+            else Human support requested or required
+                Agent->>Handoff: Submit handoff request and concise summary
+                Handoff-->>Agent: Handoff acceptance or failure
+            end
+
+            Agent->>Session: Persist assistant reply and updated conversation state
+            Session-->>Agent: Persistence result
+            Agent-->>API: Reply, status, citations if applicable, and session_id
+            API-->>Client: Chat response
+            Client-->>Customer: Display reply and next step
+        end
+    end
+
+    Note over Security,Banking: A session_id identifies a conversation; it is not proof of identity.
+    Note over Session,Banking: Conversation history is stored by the session manager; banking records and pending confirmations remain authoritative in PostgreSQL via the Banking API.
+    Note over Agent: A completed conversation turn does not by itself prove that a banking operation succeeded.

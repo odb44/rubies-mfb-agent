@@ -1,0 +1,34 @@
+flowchart TD
+    Start([Customer asks about a loan])
+    Identify["Resolve trusted customer context"]
+    Verify{"Required verification satisfied?"}
+    Eligibility["Call loan eligibility tool"]
+    Model["Loan model inference"]
+    Features["Use permitted, documented input features"]
+    Explain["Generate explanation from model output<br/>and approved lending rules"]
+    Result{"Can the result be explained<br/>and supported?"}
+    Return["Return eligibility result and limitations"]
+    Abstain["Do not invent an approval or rejection reason"]
+    Status["For an existing loan, call loan status tool"]
+    Handoff["Offer human review / handoff when needed"]
+    Audit[("Log tool call, inputs, model version,<br/>output, explanation and outcome")]
+
+    Start --> Identify --> Verify
+    Verify -->|"No"| Handoff
+    Verify -->|"Yes: eligibility check"| Features --> Model --> Explain --> Result
+    Result -->|"Yes"| Return
+    Result -->|"No"| Abstain --> Handoff
+    Verify -->|"Question about an existing loan"| Status --> Return
+
+    Eligibility -.-> Model
+    Features -.-> Audit
+    Model -.-> Audit
+    Explain -.-> Audit
+    Status -.-> Audit
+    Return -.-> Audit
+    Handoff -.-> Audit
+
+    Note["Eligibility is not a promise of disbursement. The agent reports the result and its supported explanation; it must not fabricate features, model reasoning, or lending policy."]:::note
+    Note --- Return
+
+    classDef note fill:#fff8dc,stroke:#a88b35,color:#222;

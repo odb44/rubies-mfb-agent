@@ -1,0 +1,32 @@
+flowchart TD
+    Start([Handoff needed]) --> Trigger{Why hand off?}
+    Trigger -->|Customer requests a person| Prepare
+    Trigger -->|Customer is upset or issue is sensitive| Prepare
+    Trigger -->|Agent is uncertain / evidence inadequate| Prepare
+    Trigger -->|Tool result or execution outcome needs investigation| Prepare
+
+    Prepare[Build concise case summary from verified conversation and tool results] --> Minimize[Remove unnecessary personal data, credentials, and secrets]
+    Minimize --> Context[Attach trusted customer/session reference, reason, relevant operation IDs, and source citations where applicable]
+    Context --> Submit[Submit handoff through the configured support boundary]
+    Submit --> Result{Did support system confirm receipt?}
+
+    Result -->|Accepted with reference| Record[Record handoff event and reference in audit trail]
+    Record --> Tell[Tell customer handoff was accepted and provide reference / next step]
+
+    Result -->|Rejected or unavailable| Failure[Record failed handoff attempt without claiming acceptance]
+    Failure --> Safe[Explain that live handoff could not be confirmed; provide approved fallback or ask how to proceed]
+
+    Result -->|Outcome unknown| Unknown[Reconcile handoff status using correlation/reference if available]
+    Unknown --> Reconciled{Can receipt be confirmed?}
+    Reconciled -->|Yes| Record
+    Reconciled -->|No / still unknown| UnknownRecord[Record unresolved handoff outcome]
+    UnknownRecord --> Safe
+
+    Record --> End([End])
+    Safe --> End
+
+    Note[Do not invent a case number or claim that a human has received the case unless the support boundary confirms receipt.]:::note
+    Tell -.-> Note
+    Safe -.-> Note
+
+    classDef note fill:#fff4cc,stroke:#b38b00,color:#333

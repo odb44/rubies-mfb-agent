@@ -1,0 +1,114 @@
+# Component Architecture Diagram
+
+- **Status:** Accepted
+- **Version:** 0.1
+- **Repository path:** `docs/architecture/diagrams/component-diagram.mmd`
+- **Related artifacts:** `docs/architecture/architecture-sketch.md`, `docs/architecture/component-architecture.md`, `docs/architecture/diagrams/system-context.mmd`, `docs/api/agent-interface.md`, `docs/api/banking-api-contract.md`, `docs/api/mcp-tool-contracts.md`, `docs/adr/ADR-008-agent-execution-and-confirmation-lifecycle.md`
+
+## Purpose
+
+Show the major internal components and their responsibilities, and make the intended call boundaries visible. This diagram is a logical component view; it does not define physical deployment or low-level class design.
+
+```mermaid
+flowchart TB
+    Client[Customer Client / Channel]
+
+    subgraph AgentApp["apps/agent — Agent Application"]
+        API[API Routes and Request Schemas]
+        Deps[Authentication and Request Dependencies]
+        Conv[Conversation Manager]
+        SessionAdapter[Strands File Session Manager Adapter]
+        Orchestrator[Agent Orchestration]
+        ToolRouter[Tool Router]
+        Registry[Registered Tool Catalogue and Schemas]
+        ConfirmManager[Confirmation Manager]
+        HandoffManager[Handoff Manager]
+        ResponseBuilder[Response Builder]
+
+        API --> Deps
+        API --> Conv
+        Conv --> SessionAdapter
+        Conv --> Orchestrator
+        Orchestrator --> ToolRouter
+        ToolRouter --> Registry
+        Orchestrator --> ConfirmManager
+        Orchestrator --> HandoffManager
+        Orchestrator --> ResponseBuilder
+    end
+
+    subgraph KnowledgePkg["packages/knowledge_base"]
+        Ingest[Ingestion and Chunking]
+        Embed[Embedding and Indexing]
+        Retrieve[Retrieval and Citation Assembly]
+        Index[(Local Vector Index)]
+        Ingest --> Embed --> Index
+        Retrieve --> Index
+    end
+
+    subgraph BankingApp["apps/banking_api — Banking API"]
+        BankingRoutes[Banking API Routes]
+        Identity[Trusted Identity / Ownership / Permission Checks]
+        Domain[Banking Domain Services]
+        Persistence[Persistence Layer]
+        PG[(PostgreSQL)]
+        BankingRoutes --> Identity --> Domain --> Persistence --> PG
+    end
+
+    subgraph MCPApp["apps/mcp_server — MCP Server"]
+        MCPEntry[MCP Entry Point]
+        MCPRegistry[Registered MCP Tools and Input Schemas]
+        MCPAuth[Per-tool Permission Checks]
+        MCPEntry --> MCPRegistry --> MCPAuth
+    end
+
+    subgraph LoanApp["apps/loan_model — Loan Model"]
+        Inference[Eligibility Inference]
+        Explain[Permitted Explanation Output]
+        Artifacts[(Versioned Local Model Artifacts)]
+        Inference --> Artifacts
+        Inference --> Explain
+    end
+
+    subgraph Shared["Shared Packages"]
+        Security[packages/security]
+        SharedSchemas[packages/shared]
+        Observability[packages/observability]
+    end
+
+    Client --> API
+    Deps --> Security
+    API --> SharedSchemas
+    Orchestrator --> Retrieve
+    ToolRouter --> MCPEntry
+    MCPAuth --> BankingRoutes
+    Domain --> ConfirmManager
+    Domain --> Observability
+    Orchestrator --> Inference
+    AgentApp --> Observability
+
+    classDef boundary fill:#d9eaf7,stroke:#134f5c,color:#222;
+    classDef persistence fill:#d9ead3,stroke:#38761d,color:#222;
+    classDef security fill:#fff2cc,stroke:#9a6700,color:#222;
+    class API,Orchestrator,ToolRouter,MCPEntry,BankingRoutes boundary;
+    class PG,Index,Artifacts,SessionAdapter persistence;
+    class Deps,Identity,MCPAuth,ConfirmManager security;
+```
+
+## Component boundary notes
+
+1. **Agent API** validates the external request shape and uses authenticated request context. Session IDs are not identity proof.
+2. **Conversation Manager** coordinates message/session lifecycle and uses the Strands File Session Manager adapter for conversation state. It does not treat conversation history as banking truth.
+3. **Agent Orchestration** coordinates the model, RAG retrieval, tool proposals, response composition, and handoff decisions.
+4. **Tool Router and registered catalogue** restrict tool use to the approved nine-tool catalogue and validate tool arguments before dispatch.
+5. **Confirmation Manager** coordinates the customer-facing confirmation lifecycle, but durable pending-action state and execution enforcement are owned by trusted backend persistence/services. The agent-side manager cannot authorize a banking operation by itself.
+6. **MCP Server** exposes registered capabilities and applies per-tool permission checks. It must not access banking tables directly.
+7. **Banking API** independently enforces identity context, resource ownership, permissions, domain rules, confirmation validity, idempotency, persistence, and operation outcomes.
+8. **Knowledge Base package** ingests source documents, indexes content, retrieves evidence, and assembles document/section citations. Insufficient or conflicting evidence must result in abstention rather than guessing.
+9. **Loan Model application** runs the approved eligibility inference and returns permitted explanation fields. It does not independently authorize a customer or approve/disburse a loan.
+10. **Shared packages** provide common schemas/configuration, security utilities, and observability instrumentation without replacing service-level enforcement.
+
+## Important consistency note
+
+The `Confirmation Manager` in the agent application is a coordination component only. The Banking API and PostgreSQL remain authoritative for pending action state and whether a state-changing operation may execute. The `Tool Router` calls the MCP server, which calls the Banking API; the agent does not call banking persistence directly.
+
+This diagram shows logical responsibilities only. Exact process boundaries, dependency injection, and deployment placement remain for the deployment architecture and implementation design.

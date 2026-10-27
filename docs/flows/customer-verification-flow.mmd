@@ -1,0 +1,75 @@
+sequenceDiagram
+    autonumber
+    actor Customer
+    participant Client as Customer Channel
+    participant Agent as Agent API / Orchestrator
+    participant Session as Trusted Session Context
+    participant Security as Security / Verification
+    participant Banking as Banking API
+    participant DB as PostgreSQL
+    participant Audit as Audit Logging
+
+    Customer->>Client: Start conversation / ask question
+    Client->>Agent: Send request with session credentials
+    Agent->>Session: Load conversation state
+    Agent->>Security: Resolve trusted identity and verification state
+    Security-->>Agent: Identity context / verification status
+    Note over Agent,Security: Support-session verification establishes identity for permitted support actions; it does not establish, change, or upgrade the customer's regulatory KYC tier.
+
+    alt Identity required but not verified
+        Agent-->>Client: Request appropriate verification
+        Client-->>Customer: Present verification prompt
+    else Request can proceed
+        Agent->>Agent: Classify intent and choose read or write path
+        Note over Agent,Banking: For KYC questions, use RAG for general policy requirements. For a customer's actual KYC tier/status or restrictions, use only an authorized account lookup and report recorded values; tier changes or reviews follow a separate approved process.
+
+        alt Read-only banking query
+            Agent->>Banking: Request operation using trusted session context
+            Banking->>Security: Enforce ownership and permission checks
+            Security-->>Banking: Allow or deny
+            alt Allowed
+                Banking->>DB: Read authorized records
+                DB-->>Banking: Records
+                Banking->>Audit: Record tool/action outcome
+                Banking-->>Agent: Result
+                Agent-->>Client: Answer using returned result
+            else Denied
+                Banking->>Audit: Record denial
+                Banking-->>Agent: Authorization error
+                Agent-->>Client: Safe refusal / next step
+            end
+        else Sensitive write or consequential action
+            Agent->>Banking: Prepare action with trusted identity and idempotency key
+            Banking->>Security: Enforce identity, permission and step-up requirements
+            Security-->>Banking: Allow or deny preparation
+            alt Preparation allowed
+                Banking->>DB: Persist pending action, expiry and audit record
+                DB-->>Banking: Pending action reference
+                Banking-->>Agent: Confirmation summary and reference
+                Agent-->>Client: Ask customer to confirm exact action
+                Client-->>Customer: Display confirmation details
+                Customer->>Client: Confirm or cancel
+                Client->>Agent: Submit confirmation response
+                Agent->>Banking: Submit pending-action reference and approval signal
+                Banking->>DB: Validate expiry, action match, single-use status and ownership
+                DB-->>Banking: Validation result
+                alt Approval valid
+                    Banking->>DB: Atomically claim approval and execute authorized state change
+                    DB-->>Banking: Execution outcome
+                    Banking->>Audit: Record final outcome
+                    Banking-->>Agent: Confirmed success or known failure
+                    Agent-->>Client: Report outcome
+                else Expired, mismatched, reused or invalid
+                    Banking->>Audit: Record rejected confirmation
+                    Banking-->>Agent: Confirmation rejected
+                    Agent-->>Client: Explain that confirmation is invalid: restart if appropriate
+                end
+            else Preparation denied
+                Banking->>Audit: Record denied preparation
+                Banking-->>Agent: Authorization / verification error
+                Agent-->>Client: Safe refusal or verification next step
+            end
+        end
+    end
+
+    Note over Agent,DB: The agent coordinates the conversation. The Banking API and PostgreSQL remain authoritative for pending confirmations and banking writes.

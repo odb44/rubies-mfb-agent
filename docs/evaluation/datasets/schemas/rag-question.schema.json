@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rubies MFB RAG Evaluation Case",
+  "description": "Compatibility-oriented schema derived from the observed structure of rag-policy-questions-v0.2.jsonl. Review before enforcement; this schema preserves dataset field names.",
+  "type": "object",
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^RAG-[0-9]{3,}$"
+    },
+    "dataset_version": {
+      "type": "string"
+    },
+    "expected_answer_points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expected_handoff": {
+      "type": "boolean"
+    },
+    "expected_response_language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "pcm"
+      ]
+    },
+    "expected_response_style": {
+      "type": "string"
+    },
+    "expected_tool_calls": {
+      "type": "array"
+    },
+    "forbidden_claims": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "en",
+        "pcm"
+      ]
+    },
+    "language_match_pass_criteria": {
+      "type": "string"
+    },
+    "language_match_required": {
+      "type": "boolean"
+    },
+    "language_match_scoring": {
+      "type": "string"
+    },
+    "lifecycle_status": {
+      "type": "string"
+    },
+    "must_abstain": {
+      "type": "boolean"
+    },
+    "must_cite": {
+      "type": "boolean"
+    },
+    "required_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string"
+          },
+          "section": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document",
+          "section"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "safety_parity_pass_criteria": {
+      "type": "string"
+    },
+    "safety_parity_scoring": {
+      "type": "string"
+    },
+    "severity_if_failed": {
+      "type": "string"
+    },
+    "source_status": {
+      "type": "string"
+    },
+    "topic": {
+      "type": "string"
+    },
+    "unresolved_dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "user_message": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "case_id",
+    "dataset_version",
+    "expected_answer_points",
+    "expected_handoff",
+    "expected_response_language",
+    "expected_response_style",
+    "expected_tool_calls",
+    "forbidden_claims",
+    "language",
+    "language_match_pass_criteria",
+    "language_match_required",
+    "language_match_scoring",
+    "lifecycle_status",
+    "must_abstain",
+    "must_cite",
+    "required_sources",
+    "safety_parity_pass_criteria",
+    "safety_parity_scoring",
+    "severity_if_failed",
+    "source_status",
+    "topic",
+    "unresolved_dependencies",
+    "user_message"
+  ],
+  "additionalProperties": false
+}
