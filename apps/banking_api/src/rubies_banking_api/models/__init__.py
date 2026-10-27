@@ -5,6 +5,12 @@ from rubies_banking_api.models.confirmation import Confirmation
 from rubies_banking_api.models.customer import Customer
 from rubies_banking_api.models.dispute import Dispute
 from rubies_banking_api.models.transaction import Transaction
+from rubies_banking_api.models.support_handoff import (
+    HandoffPriority,
+    HandoffRoute,
+    HandoffStatus,
+    SupportHandoff,
+)
 
 __all__ = [
     "Account",
@@ -14,4 +20,8 @@ __all__ = [
     "Customer",
     "Dispute",
     "Transaction",
+    "HandoffPriority",
+    "HandoffRoute",
+    "HandoffStatus",
+    "SupportHandoff",
 ]

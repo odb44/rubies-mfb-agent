@@ -42,7 +42,7 @@ class LoanEnquiryService:
             identity.customer_id
         )
 
-        if customer is None or not customer.active:
+        if customer is None or not customer.is_active:
             raise CustomerMismatchError(
                 "The customer account is not available."
             )

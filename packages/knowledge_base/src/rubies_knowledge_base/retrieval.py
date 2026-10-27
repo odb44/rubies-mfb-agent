@@ -1,11 +1,4 @@
-"""Policy retrieval for the Rubies MFB customer support agent.
-
-This module searches approved Markdown policy documents and returns
-source-grounded excerpts with document and section metadata.
-
-The initial implementation uses lexical retrieval so it can run without
-an embedding service or external vector database.
-"""
+"""Retrieve relevant banking policy passages using semantic and lexical search."""
 
 from __future__ import annotations
 
@@ -15,17 +8,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_TOP_K = 4
-DEFAULT_MIN_SCORE = 0.12
+DEFAULT_MIN_SCORE = 0.35
 
-_WORD_PATTERN = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)?", re.IGNORECASE)
+_WORD_PATTERN = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 _HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class PolicyChunk:
-    """A searchable section or paragraph from a policy document."""
+    """A searchable passage from an approved banking policy document."""
 
     source: str
     title: str
@@ -34,178 +26,161 @@ class PolicyChunk:
 
 
 def _project_root() -> Path:
-    """Resolve the repository root from this package's source location."""
+    """Resolve the repository root from this package's source directory."""
     return Path(__file__).resolve().parents[4]
 
 
 def _policy_directory(policy_dir: str | Path | None = None) -> Path:
-    """Resolve the policy directory, allowing explicit deployment overrides."""
+    """Resolve the directory containing approved Markdown policy documents."""
     if policy_dir is not None:
         return Path(policy_dir).expanduser().resolve()
 
-    configured_directory = os.getenv("RUBIES_POLICY_DIR", "").strip()
-
+    configured_directory = os.getenv("RUBIES_POLICY_DIR")
     if configured_directory:
         return Path(configured_directory).expanduser().resolve()
 
     return _project_root() / "docs" / "banking_policies"
 
 
-def _tokenize(text: str) -> list[str]:
-    """Normalize text into searchable lowercase tokens."""
-    return _WORD_PATTERN.findall(text.lower())
+def _tokenize(text: str) -> set[str]:
+    """Convert text into a set of lowercase alphanumeric tokens."""
+    return {token.lower() for token in _WORD_PATTERN.findall(text)}
 
 
 def _clean_markdown(text: str) -> str:
-    """Remove common Markdown formatting while retaining readable content."""
+    """Remove common Markdown formatting while preserving readable content."""
     text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
-    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
     text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"^\s*[-*_]{3,}\s*$", " ", text, flags=re.MULTILINE)
     text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
-    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
-    text = re.sub(r"[*_~>#]", " ", text)
+    text = re.sub(r"^\s*\d+[.)]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"[#>*_~]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _load_policy_chunks(policy_dir: Path) -> list[PolicyChunk]:
-    """Load Markdown policies and split them at headings."""
-    if not policy_dir.is_dir():
+def _load_policy_chunks(
+    policy_dir: str | Path | None = None,
+) -> list[PolicyChunk]:
+    """Load policy Markdown files and split them into heading-based passages."""
+    directory = _policy_directory(policy_dir)
+
+    if not directory.exists() or not directory.is_dir():
         return []
 
     chunks: list[PolicyChunk] = []
 
-    for path in sorted(policy_dir.glob("*.md")):
+    for path in sorted(directory.glob("*.md")):
         try:
-            document = path.read_text(encoding="utf-8")
+            markdown = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError):
-            # An unreadable document must not prevent other policies
-            # from being searched.
             continue
 
-        if not document.strip():
-            continue
+        current_title = path.stem.replace("-", " ").replace("_", " ").title()
+        current_section = "General"
+        paragraphs: list[str] = []
 
-        headings: list[tuple[int, str]] = []
-        lines = document.splitlines()
+        def flush_paragraphs() -> None:
+            if not paragraphs:
+                return
 
-        for index, line in enumerate(lines):
-            match = _HEADING_PATTERN.match(line.strip())
-            if match:
-                headings.append((index, match.group(2).strip()))
-
-        if headings:
-            title = headings[0][1]
-            sections: list[tuple[str, str]] = []
-
-            for position, (start, heading) in enumerate(headings):
-                end = (
-                    headings[position + 1][0]
-                    if position + 1 < len(headings)
-                    else len(lines)
-                )
-
-                body = "\n".join(lines[start + 1 : end]).strip()
-
-                if body:
-                    sections.append((heading, body))
-        else:
-            title = path.stem.replace("-", " ").replace("_", " ").title()
-            sections = [("Document", document)]
-
-        for section, body in sections:
-            content = _clean_markdown(body)
+            content = _clean_markdown("\n\n".join(paragraphs))
+            paragraphs.clear()
 
             if not content:
+                return
+
+            chunks.append(
+                PolicyChunk(
+                    source=path.name,
+                    title=current_title,
+                    section=current_section,
+                    content=content,
+                )
+            )
+
+        for line in markdown.splitlines():
+            heading_match = _HEADING_PATTERN.match(line.strip())
+
+            if heading_match:
+                flush_paragraphs()
+                heading_level = len(heading_match.group(1))
+                heading_text = _clean_markdown(heading_match.group(2))
+
+                if heading_level == 1:
+                    current_title = heading_text
+                    current_section = "General"
+                else:
+                    current_section = heading_text
+
                 continue
 
-            # Keep individual retrieval results reasonably focused.
-            # Split long sections at paragraph boundaries.
-            paragraphs = [
-                paragraph.strip()
-                for paragraph in re.split(r"\n\s*\n", body)
-                if paragraph.strip()
-            ]
-
-            if len(content) <= 1800 or len(paragraphs) <= 1:
-                chunks.append(
-                    PolicyChunk(
-                        source=path.name,
-                        title=title,
-                        section=section,
-                        content=content[:1800],
-                    )
-                )
+            if not line.strip():
+                flush_paragraphs()
                 continue
 
-            current: list[str] = []
-            current_length = 0
+            paragraphs.append(line)
 
-            for paragraph in paragraphs:
-                cleaned = _clean_markdown(paragraph)
-
-                if not cleaned:
-                    continue
-
-                if current and current_length + len(cleaned) > 1400:
-                    chunks.append(
-                        PolicyChunk(
-                            source=path.name,
-                            title=title,
-                            section=section,
-                            content=" ".join(current),
-                        )
-                    )
-                    current = []
-                    current_length = 0
-
-                current.append(cleaned)
-                current_length += len(cleaned) + 1
-
-            if current:
-                chunks.append(
-                    PolicyChunk(
-                        source=path.name,
-                        title=title,
-                        section=section,
-                        content=" ".join(current),
-                    )
-                )
+        flush_paragraphs()
 
     return chunks
 
 
-def _score_chunk(query_tokens: list[str], chunk: PolicyChunk) -> float:
-    """Score a policy excerpt using weighted lexical overlap."""
-    query_terms = set(query_tokens)
+def _score_chunk(query: str, chunk: PolicyChunk) -> float:
+    """Calculate a lexical relevance score between zero and one."""
+    query_tokens = _tokenize(query)
 
-    if not query_terms:
+    if not query_tokens:
         return 0.0
 
-    title_terms = set(_tokenize(chunk.title))
-    section_terms = set(_tokenize(chunk.section))
+    title_tokens = _tokenize(chunk.title)
+    section_tokens = _tokenize(chunk.section)
     content_tokens = _tokenize(chunk.content)
-    content_terms = set(content_tokens)
 
-    title_overlap = len(query_terms & title_terms) / len(query_terms)
-    section_overlap = len(query_terms & section_terms) / len(query_terms)
-    content_overlap = len(query_terms & content_terms) / len(query_terms)
+    title_score = len(query_tokens & title_tokens) / len(query_tokens)
+    section_score = len(query_tokens & section_tokens) / len(query_tokens)
+    content_score = len(query_tokens & content_tokens) / len(query_tokens)
 
-    # Titles and headings help identify relevant policy areas.
     score = (
-        0.25 * title_overlap
-        + 0.25 * section_overlap
-        + 0.50 * content_overlap
+        0.25 * title_score
+        + 0.25 * section_score
+        + 0.50 * content_score
     )
 
-    # Reward a query phrase appearing in the excerpt.
-    normalized_query = " ".join(query_tokens)
-    normalized_content = " ".join(content_tokens)
+    normalized_query = " ".join(query.lower().split())
+    normalized_content = " ".join(chunk.content.lower().split())
 
-    if normalized_query and normalized_query in normalized_content:
-        score = min(1.0, score + 0.15)
+    if len(normalized_query) >= 4 and normalized_query in normalized_content:
+        score = min(1.0, score + 0.20)
 
     return round(score, 4)
+
+
+def _format_results(
+    results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Format retrieval results consistently for downstream agent components."""
+    if not results:
+        return {
+            "found": False,
+            "results": [],
+            "message": (
+                "No sufficiently relevant approved banking policy was found. "
+                "Do not invent a policy answer; ask for clarification or "
+                "escalate when appropriate."
+            ),
+        }
+
+    return {
+        "found": True,
+        "results": results,
+        "message": (
+            "Use the retrieved policy passages as grounding for the response. "
+            "Identify the source filename and section where appropriate. "
+            "Do not claim that a policy says more than the retrieved text supports."
+        ),
+    }
 
 
 def search_policies(
@@ -215,101 +190,81 @@ def search_policies(
     top_k: int = DEFAULT_TOP_K,
     min_score: float = DEFAULT_MIN_SCORE,
 ) -> dict[str, Any]:
-    """Search approved banking policies and return cited excerpts.
+    """Search approved banking policies semantically, with lexical fallback.
+
+    Semantic search uses the persistent local vector index. If the index is
+    unavailable or stale, lexical retrieval is used instead.
 
     Args:
-        query: The customer's policy-related question.
+        query: The customer's question or policy-related search query.
         policy_dir: Optional directory containing approved Markdown policies.
-        top_k: Maximum number of excerpts to return.
-        min_score: Minimum lexical relevance score for a result.
+        top_k: Maximum number of passages to return.
+        min_score: Minimum relevance score between zero and one.
 
     Returns:
-        A JSON-serializable result containing relevant excerpts and their
-        source metadata, or an explicit abstention when evidence is weak.
+        A dictionary containing the found flag, ranked results, and guidance.
     """
     if not isinstance(query, str) or not query.strip():
-        return {
-            "found": False,
-            "query": query if isinstance(query, str) else "",
-            "results": [],
-            "message": "Please provide a question about a banking policy.",
-        }
+        return _format_results([])
 
     if top_k < 1:
         raise ValueError("top_k must be at least 1.")
 
     if not 0.0 <= min_score <= 1.0:
-        raise ValueError("min_score must be between 0 and 1.")
+        raise ValueError("min_score must be between 0.0 and 1.0.")
 
-    query_tokens = _tokenize(query)
+    if not _tokenize(query):
+        return _format_results([])
 
-    if not query_tokens:
-        return {
-            "found": False,
-            "query": query,
-            "results": [],
-            "message": "The question contains no searchable terms.",
-        }
-
-    directory = _policy_directory(policy_dir)
-    chunks = _load_policy_chunks(directory)
+    chunks = _load_policy_chunks(policy_dir)
 
     if not chunks:
-        return {
-            "found": False,
-            "query": query,
-            "results": [],
-            "message": (
-                "The approved policy documents are unavailable. "
-                "Do not infer a policy answer."
-            ),
-        }
+        return _format_results([])
 
-    scored_results = [
-        (score, chunk)
-        for chunk in chunks
-        if (score := _score_chunk(query_tokens, chunk)) >= min_score
-    ]
+    # Import lazily to avoid a circular import:
+    # vector_index imports PolicyChunk and helpers from this module.
+    try:
+        from rubies_knowledge_base.vector_index import search_policy_index
+
+        semantic_results = search_policy_index(
+            query,
+            policy_dir=policy_dir,
+            top_k=top_k,
+            min_score=min_score,
+        )
+    except (ImportError, OSError, ValueError, RuntimeError):
+        semantic_results = None
+
+    # A None result means that the index is missing, stale, or unavailable.
+    # An empty list means semantic search ran successfully but found no match.
+    if semantic_results is not None:
+        return _format_results(semantic_results)
+
+    # Lexical fallback: keeps retrieval usable without a valid vector index.
+    scored_results: list[dict[str, Any]] = []
+
+    for chunk in chunks:
+        score = _score_chunk(query, chunk)
+
+        if score < min_score:
+            continue
+
+        scored_results.append(
+            {
+                "source": chunk.source,
+                "title": chunk.title,
+                "section": chunk.section,
+                "excerpt": chunk.content[:700],
+                "score": score,
+            }
+        )
 
     scored_results.sort(
-        key=lambda item: (
-            item[0],
-            item[1].source,
-            item[1].section,
-        ),
-        reverse=True,
+        key=lambda result: (
+            -result["score"],
+            result["source"],
+            result["section"],
+        )
     )
 
-    results = [
-        {
-            "source": chunk.source,
-            "title": chunk.title,
-            "section": chunk.section,
-            "excerpt": chunk.content,
-            "score": score,
-        }
-        for score, chunk in scored_results[:top_k]
-    ]
-
-    if not results:
-        return {
-            "found": False,
-            "query": query,
-            "results": [],
-            "message": (
-                "No sufficiently relevant approved policy excerpt was found. "
-                "Do not invent a policy answer; clarify the question or "
-                "refer the customer to human support."
-            ),
-        }
-
-    return {
-        "found": True,
-        "query": query,
-        "results": results,
-        "message": (
-            "Use the returned excerpts as the evidence for your answer. "
-            "Cite the source filename and section. Do not claim the excerpts "
-            "establish facts that they do not contain."
-        ),
-    }
+    return _format_results(scored_results[:top_k])

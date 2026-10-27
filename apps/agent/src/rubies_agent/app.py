@@ -1,12 +1,21 @@
 """FastAPI application for the Rubies MFB support agent."""
 
+import logging
+import re
+import time
 from collections.abc import AsyncIterator
 from typing import Any
+from uuid import uuid4
 
 from ag_ui.core import RunAgentInput
 from ag_ui_strands import StrandsAgent, add_strands_fastapi_endpoint
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from rubies_banking_api.api.dependencies import get_customer_identity
+from rubies_observability import (
+    configure_logging,
+    correlation_context,
+    log_event,
+)
 from strands import Agent
 
 from rubies_agent.runtime import (
@@ -14,6 +23,23 @@ from rubies_agent.runtime import (
     reset_request_access_token,
     set_request_access_token,
 )
+
+CORRELATION_HEADER = "X-Correlation-ID"
+CORRELATION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+configure_logging()
+logger = logging.getLogger("rubies.agent")
+
+
+def resolve_correlation_id(request: Request) -> str:
+    """Use a valid incoming correlation ID or generate a new one."""
+
+    incoming_id = request.headers.get(CORRELATION_HEADER, "").strip()
+
+    if CORRELATION_ID_PATTERN.fullmatch(incoming_id):
+        return incoming_id
+
+    return str(uuid4())
 
 
 async def require_authenticated_customer(
@@ -25,18 +51,13 @@ async def require_authenticated_customer(
     authorization = request.headers.get("authorization", "")
     scheme, separator, token = authorization.partition(" ")
 
-    if (
-        not separator
-        or scheme.lower() != "bearer"
-        or not token.strip()
-    ):
+    if not separator or scheme.lower() != "bearer" or not token.strip():
         raise HTTPException(
             status_code=401,
             detail="A valid bearer token is required.",
         )
 
     request.state.customer_identity = identity
-
     token_context = set_request_access_token(token.strip())
 
     try:
@@ -54,9 +75,7 @@ async def build_invocation_state(
     identity = getattr(request.state, "customer_identity", None)
 
     if identity is None:
-        raise RuntimeError(
-            "Authenticated customer context is missing."
-        )
+        raise RuntimeError("Authenticated customer context is missing.")
 
     return {
         "customer_id": identity.customer_id,
@@ -79,6 +98,83 @@ def create_app(agent: Agent | None = None) -> FastAPI:
         title="Rubies MFB Customer Support Agent",
         version="0.1.0",
     )
+
+
+    @app.middleware("http")
+    async def correlation_middleware(
+        request: Request,
+        call_next,
+    ) -> Response:
+        """Attach a correlation ID to the request and its log events."""
+
+        correlation_id = resolve_correlation_id(request)
+        request.state.correlation_id = correlation_id
+        started_at = time.perf_counter()
+
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+
+        try:
+            with correlation_context(correlation_id):
+                response = await call_next(request)
+
+                duration_ms = round(
+                    (time.perf_counter() - started_at) * 1000,
+                    2,
+                )
+
+                response.headers[CORRELATION_HEADER] = correlation_id
+
+                try:
+                    log_event(
+                        logger,
+                        "http_request",
+                        component="agent",
+                        outcome=(
+                            "success"
+                            if response.status_code < 500
+                            else "failure"
+                        ),
+                        duration_ms=duration_ms,
+                        metadata={
+                            "method": request.method,
+                            "route": route_path,
+                            "status_code": response.status_code,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to record agent HTTP request."
+                    )
+
+                return response
+
+        except Exception as exc:
+            try:
+                with correlation_context(correlation_id):
+                    log_event(
+                        logger,
+                        "http_request",
+                        component="agent",
+                        outcome="failure",
+                        duration_ms=round(
+                            (time.perf_counter() - started_at) * 1000,
+                            2,
+                        ),
+                        exception_type=type(exc).__name__,
+                        metadata={
+                            "method": request.method,
+                            "route": route_path,
+                            "status_code": 500,
+                        },
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to record agent HTTP request failure."
+                )
+
+            raise
+
 
     add_strands_fastapi_endpoint(
         app,

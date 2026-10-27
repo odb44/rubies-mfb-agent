@@ -7,7 +7,9 @@ dependencies = [
     "rubies-banking-api",
     "rubies-shared",
     "rubies-security",
+    "rubies-observability",
     "mcp>=1.28,<2",
+    "rubies-loan-model",
 ]
 
 [build-system]
@@ -21,3 +23,5 @@ packages = ["src/rubies_mcp_server"]
 rubies-banking-api = { workspace = true }
 rubies-shared = { workspace = true }
 rubies-security = { workspace = true }
+rubies_loan_model = {workspace = true}
+rubies-observability = {workspace = true}

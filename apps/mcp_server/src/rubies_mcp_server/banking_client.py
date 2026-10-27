@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from rubies_observability import get_correlation_id
 
 
 class BankingAPIError(Exception):
@@ -37,6 +38,7 @@ class BankingAPIClient:
 
     def _resolve_access_token(self, access_token: str | None) -> str:
         """Resolve credentials, preferring the current request's token."""
+
         if access_token is not None and not access_token.strip():
             raise ValueError("A valid access token is required.")
 
@@ -49,6 +51,21 @@ class BankingAPIClient:
 
         return token.strip()
 
+    @staticmethod
+    def _request_headers(token: str) -> dict[str, str]:
+        """Build safe request headers, propagating the correlation ID."""
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        }
+
+        correlation_id = get_correlation_id()
+        if correlation_id:
+            headers["X-Correlation-ID"] = correlation_id
+
+        return headers
+
     async def _get(
         self,
         path: str,
@@ -57,6 +74,7 @@ class BankingAPIClient:
         access_token: str | None = None,
     ) -> dict[str, Any]:
         """Perform an authenticated GET request and validate its response."""
+
         token = self._resolve_access_token(access_token)
         url = f"{self.base_url}{path}"
 
@@ -67,10 +85,7 @@ class BankingAPIClient:
             ) as client:
                 response = await client.get(
                     url,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Accept": "application/json",
-                    },
+                    headers=self._request_headers(token),
                 )
         except httpx.TimeoutException as exc:
             raise BankingAPIError(
@@ -115,6 +130,97 @@ class BankingAPIClient:
 
         return payload
 
+    async def create_support_handoff(
+        self,
+        *,
+        reason: str,
+        summary: str,
+        route: str,
+        priority: str,
+        actions_attempted: list[str],
+        unresolved_questions: list[str],
+        correlation_id: str | None = None,
+        access_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Queue a support handoff for the authenticated customer."""
+
+        token = self._resolve_access_token(access_token)
+
+        effective_correlation_id = (
+            correlation_id or get_correlation_id()
+        )
+
+        payload = {
+            "reason": reason,
+            "summary": summary,
+            "route": route,
+            "priority": priority,
+            "actions_attempted": actions_attempted,
+            "unresolved_questions": unresolved_questions,
+            "correlation_id": effective_correlation_id,
+        }
+
+        headers = self._request_headers(token)
+        if effective_correlation_id:
+            headers["X-Correlation-ID"] = effective_correlation_id
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.timeout,
+                follow_redirects=False,
+            ) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/support-handoffs",
+                    headers={
+                        **headers,
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+        except httpx.TimeoutException as exc:
+            raise BankingAPIError(
+                "The support handoff request timed out."
+            ) from exc
+        except httpx.RequestError as exc:
+            raise BankingAPIError(
+                "The Banking API could not be reached."
+            ) from exc
+
+        if response.status_code == 401:
+            raise BankingAPIError(
+                "Authentication is required or the session has expired."
+            )
+
+        if response.status_code == 403:
+            raise BankingAPIError(
+                "You are not authorized to request this handoff."
+            )
+
+        if response.status_code >= 400:
+            raise BankingAPIError(
+                "The Banking API could not queue the handoff "
+                f"(HTTP {response.status_code})."
+            )
+
+        try:
+            result = response.json()
+        except ValueError as exc:
+            raise BankingAPIError(
+                "The Banking API returned invalid handoff data."
+            ) from exc
+
+        if not isinstance(result, dict):
+            raise BankingAPIError(
+                "The Banking API returned an unexpected handoff response."
+            )
+
+        if not result.get("reference") or not result.get("status"):
+            raise BankingAPIError(
+                "The Banking API returned an incomplete handoff response."
+            )
+
+        return result
+
     async def get_transaction_status(
         self,
         transaction_reference: str,
@@ -122,6 +228,7 @@ class BankingAPIClient:
         access_token: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve a transaction status through the authorized Banking API."""
+
         reference = transaction_reference.strip()
 
         if not reference:
@@ -142,6 +249,7 @@ class BankingAPIClient:
         access_token: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve a loan status through the authorized Banking API."""
+
         reference = loan_reference.strip()
 
         if not reference:

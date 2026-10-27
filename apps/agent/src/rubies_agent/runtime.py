@@ -12,6 +12,16 @@ from strands.models.bedrock import BedrockModel
 
 from rubies_knowledge_base.retrieval import search_policies
 
+import logging
+from time import perf_counter
+
+from rubies_observability import (
+    configure_logging,
+    get_correlation_id,
+    log_event,
+)
+configure_logging()
+logger = logging.getLogger("rubies.agent")
 
 # Set by the authenticated request handler before the agent is invoked.
 # ContextVar keeps the value isolated between concurrent async request tasks.
@@ -48,64 +58,106 @@ async def _call_banking_tool(
     arguments: dict[str, str],
 ) -> dict[str, Any]:
     """Call an authenticated banking MCP tool for the current customer."""
-    token = _get_request_access_token()
-    mcp_url = os.getenv(
-        "MCP_SERVER_URL",
-        "http://127.0.0.1:8001/mcp",
-    ).strip()
-
-    if not mcp_url:
-        raise RuntimeError("MCP_SERVER_URL must not be empty.")
+    started = perf_counter()
+    outcome = "failure"
 
     try:
-        async with streamablehttp_client(
-            mcp_url,
-            headers={"Authorization": f"Bearer {token}"},
-        ) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
+        token = _get_request_access_token()
+        mcp_url = os.getenv(
+            "MCP_SERVER_URL",
+            "http://127.0.0.1:8001/mcp",
+        ).strip()
 
-                result = await session.call_tool(
-                    tool_name,
-                    arguments,
-                )
+        if not mcp_url:
+            raise RuntimeError("MCP_SERVER_URL must not be empty.")
 
-    except Exception as exc:
-        # Avoid returning exception details that might expose credentials
-        # or internal service information to the model.
-        raise RuntimeError(
-            "The banking service is temporarily unavailable."
-        ) from exc
+        headers = {"Authorization": f"Bearer {token}"}
+        correlation_id = get_correlation_id()
 
-    if result.isError:
-        raise RuntimeError(
-            "The banking service could not complete the request."
-        )
-
-    response: dict[str, Any] | None = None
-
-    for item in result.content:
-        text = getattr(item, "text", None)
-
-        if not isinstance(text, str):
-            continue
+        if correlation_id:
+            headers["X-Correlation-ID"] = correlation_id
 
         try:
-            decoded = json.loads(text)
-        except json.JSONDecodeError:
-            continue
+            async with streamablehttp_client(
+                mcp_url,
+                headers=headers,
+            ) as (read_stream, write_stream, _):
+                async with ClientSession(
+                    read_stream,
+                    write_stream,
+                ) as session:
+                    await session.initialize()
+                    result = await session.call_tool(
+                        tool_name,
+                        arguments,
+                    )
 
-        if isinstance(decoded, dict):
-            response = decoded
-            break
+        except Exception as exc:
+            raise RuntimeError(
+                "The banking service is temporarily unavailable."
+            ) from exc
 
-    if response is None:
-        raise RuntimeError(
-            "The banking service returned an unexpected response."
-        )
+        if result.isError:
+            raise RuntimeError(
+                "The banking service could not complete the request."
+            )
 
-    return response
+        response: dict[str, Any] | None = None
 
+        for item in result.content:
+            content_text = getattr(item, "text", None)
+
+            if not isinstance(content_text, str):
+                continue
+
+            try:
+                decoded = json.loads(content_text)
+            except json.JSONDecodeError:
+                continue
+
+            if isinstance(decoded, dict):
+                response = decoded
+                break
+
+        if response is None:
+            raise RuntimeError(
+                "The banking service returned an unexpected response."
+            )
+
+        if response.get("success") is False:
+            error = response.get("error")
+
+            if isinstance(error, str) and error.strip():
+                raise RuntimeError(error.strip())
+
+            raise RuntimeError(
+                "The banking service could not complete the request."
+            )
+
+        if response.get("success") is not True:
+            raise RuntimeError(
+                "The banking service returned an unexpected response."
+            )
+
+        outcome = "success"
+        return response
+
+    finally:
+        try:
+            log_event(
+                logger,
+                component="agent",
+                event="banking_tool_call",
+                outcome=outcome,
+                duration_ms=round(
+                    (perf_counter() - started) * 1000,
+                    2,
+                ),
+                tool_name=tool_name,
+            )
+        except Exception:
+            # Observability failures must never break banking operations.
+            pass
 
 @tool
 def search_banking_policy(query: str) -> dict[str, Any]:
@@ -173,6 +225,42 @@ async def get_loan_status(
 
     return result
 
+@tool
+async def check_loan_eligibility(
+    applicant_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Run a historical loan-model demonstration using applicant information.
+
+    This is not an official Rubies MFB eligibility assessment or loan decision.
+    All applicant data is passed through the authenticated MCP server.
+    """
+    if not isinstance(applicant_data, dict):
+        return {
+            "success": False,
+            "status": "INVALID_INPUT",
+            "error": "Applicant information must be provided as an object.",
+        }
+
+    if not applicant_data:
+        return {
+            "success": False,
+            "status": "INSUFFICIENT_INFORMATION",
+            "error": "Applicant information is required.",
+        }
+
+    try:
+        return await _call_banking_tool(
+            "check_loan_eligibility",
+            {"applicant_data": applicant_data},
+        )
+    except RuntimeError as exc:
+        return {
+            "success": False,
+            "status": "SERVICE_ERROR",
+            "error": str(exc),
+        }
+
+
 
 SYSTEM_PROMPT = """
 You are the Rubies MFB Customer Support Agent.
@@ -181,7 +269,14 @@ Your responsibilities:
 - Help customers understand banking services and policies.
 - Explain transaction statuses using verified banking information.
 - Guide customers through appropriate support workflows.
-- Explain loan eligibility results without promising loan approval.
+-Explain historical loan-model estimates without promising loan approval.
+- For loan eligibility demonstration requests, use check_loan_eligibility
+  only when the applicant has supplied the required information.
+- Ask for missing information rather than inventing applicant details.
+- Explain that the model uses historical Kaggle loan data and is not validated
+  for Rubies MFB lending decisions.
+- Never describe a historical model estimate as an actual eligibility
+  decision, approval, rejection, or loan offer.
 - Escalate unresolved, unsafe, or sensitive issues to a human support agent.
 
 Policy retrieval:
@@ -200,6 +295,8 @@ Banking tools:
 - If a tool reports failure, explain that the status could not be retrieved.
 - Never treat a reference supplied by the customer as proof of identity.
 - Never invent balances, transaction statuses, or customer records.
+- Use check_loan_eligibility only for the historical-model demonstration.
+- Treat unsuccessful tool responses as failures, not eligibility results.
 
 Security rules:
 - Never ask customers to disclose passwords, PINs, or authentication secrets.
@@ -243,5 +340,6 @@ def build_agent() -> Agent:
             search_banking_policy,
             get_transaction_status,
             get_loan_status,
+            check_loan_eligibility,
         ],
     )

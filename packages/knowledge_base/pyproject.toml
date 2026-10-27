@@ -5,6 +5,8 @@ description = "Knowledge retrieval and policy citations for Rubies MFB"
 requires-python = ">=3.11"
 dependencies = [
     "rubies-shared",
+    "numpy>=2.0,<3.0",
+    "sentence-transformers>=5.0,<6.0",
 ]
 
 [build-system]
