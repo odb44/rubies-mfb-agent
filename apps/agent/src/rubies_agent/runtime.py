@@ -1,9 +1,178 @@
 """Strands agent configuration for the Rubies MFB support agent."""
 
+import json
 import os
+from contextvars import ContextVar
+from typing import Any
 
-from strands import Agent
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+from strands import Agent, tool
 from strands.models.bedrock import BedrockModel
+
+from rubies_knowledge_base.retrieval import search_policies
+
+
+# Set by the authenticated request handler before the agent is invoked.
+# ContextVar keeps the value isolated between concurrent async request tasks.
+_request_access_token: ContextVar[str | None] = ContextVar(
+    "rubies_agent_request_access_token",
+    default=None,
+)
+
+
+def set_request_access_token(token: str):
+    """Set the authenticated token for the current request context."""
+    return _request_access_token.set(token)
+
+
+def reset_request_access_token(token_context: Any) -> None:
+    """Restore the previous token context after the request finishes."""
+    _request_access_token.reset(token_context)
+
+
+def _get_request_access_token() -> str:
+    """Return the current request's trusted bearer token."""
+    token = _request_access_token.get()
+
+    if token is None or not token.strip():
+        raise RuntimeError(
+            "An authenticated customer access token is required."
+        )
+
+    return token.strip()
+
+
+async def _call_banking_tool(
+    tool_name: str,
+    arguments: dict[str, str],
+) -> dict[str, Any]:
+    """Call an authenticated banking MCP tool for the current customer."""
+    token = _get_request_access_token()
+    mcp_url = os.getenv(
+        "MCP_SERVER_URL",
+        "http://127.0.0.1:8001/mcp",
+    ).strip()
+
+    if not mcp_url:
+        raise RuntimeError("MCP_SERVER_URL must not be empty.")
+
+    try:
+        async with streamablehttp_client(
+            mcp_url,
+            headers={"Authorization": f"Bearer {token}"},
+        ) as (read_stream, write_stream, _):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+
+                result = await session.call_tool(
+                    tool_name,
+                    arguments,
+                )
+
+    except Exception as exc:
+        # Avoid returning exception details that might expose credentials
+        # or internal service information to the model.
+        raise RuntimeError(
+            "The banking service is temporarily unavailable."
+        ) from exc
+
+    if result.isError:
+        raise RuntimeError(
+            "The banking service could not complete the request."
+        )
+
+    response: dict[str, Any] | None = None
+
+    for item in result.content:
+        text = getattr(item, "text", None)
+
+        if not isinstance(text, str):
+            continue
+
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(decoded, dict):
+            response = decoded
+            break
+
+    if response is None:
+        raise RuntimeError(
+            "The banking service returned an unexpected response."
+        )
+
+    return response
+
+
+@tool
+def search_banking_policy(query: str) -> dict[str, Any]:
+    """Search approved Rubies MFB banking policies for relevant guidance.
+
+    Use this tool for questions about banking policies, transfer failures,
+    reversals, fraud, account security, fees, and related procedures.
+    Results include source filenames, sections, and excerpts.
+    """
+    return search_policies(query)
+
+
+@tool
+async def get_transaction_status(
+    transaction_reference: str,
+) -> dict[str, Any]:
+    """Check a transaction's status for the authenticated customer.
+
+    Requires a transaction reference. The banking service validates access
+    using the bearer token associated with the current customer request.
+    """
+    reference = transaction_reference.strip()
+
+    if not reference:
+        return {
+            "success": False,
+            "error": "A valid transaction reference is required.",
+        }
+
+    try:
+        result = await _call_banking_tool(
+            "get_transaction_status",
+            {"transaction_reference": reference},
+        )
+    except RuntimeError as exc:
+        return {"success": False, "error": str(exc)}
+
+    return result
+
+
+@tool
+async def get_loan_status(
+    loan_reference: str,
+) -> dict[str, Any]:
+    """Check a loan's status for the authenticated customer.
+
+    Requires a loan reference. The banking service validates access using
+    the bearer token associated with the current customer request.
+    """
+    reference = loan_reference.strip()
+
+    if not reference:
+        return {
+            "success": False,
+            "error": "A valid loan reference is required.",
+        }
+
+    try:
+        result = await _call_banking_tool(
+            "get_loan_status",
+            {"loan_reference": reference},
+        )
+    except RuntimeError as exc:
+        return {"success": False, "error": str(exc)}
+
+    return result
+
 
 SYSTEM_PROMPT = """
 You are the Rubies MFB Customer Support Agent.
@@ -15,19 +184,34 @@ Your responsibilities:
 - Explain loan eligibility results without promising loan approval.
 - Escalate unresolved, unsafe, or sensitive issues to a human support agent.
 
+Policy retrieval:
+- For questions about banking policies, procedures, or rules, use
+  search_banking_policy before answering.
+- Base policy explanations on approved retrieved policy content.
+- Identify the source filename and relevant section when explaining a policy.
+- If no relevant policy is found, explain the limitation instead of inventing
+  an official banking rule.
+- Policy retrieval does not provide customer-specific account records.
+
+Banking tools:
+- Use get_transaction_status for transaction-status enquiries.
+- Use get_loan_status for loan-status enquiries.
+- Report banking results only when a trusted banking service returns them.
+- If a tool reports failure, explain that the status could not be retrieved.
+- Never treat a reference supplied by the customer as proof of identity.
+- Never invent balances, transaction statuses, or customer records.
+
 Security rules:
-- Never invent account balances, transaction statuses, or customer records.
-- Never treat information supplied in a conversation as proof of customer identity.
 - Never ask customers to disclose passwords, PINs, or authentication secrets.
+- Never reveal access tokens or internal authentication details.
 - Never claim an operation succeeded unless a trusted service confirms it.
 - Never execute a sensitive state-changing operation without the required
   server-enforced authorization and explicit confirmation.
 - If reliable information is unavailable, explain the limitation and offer
   an appropriate next step.
 
-Only use banking tools and policy sources that have been explicitly provided
-to you. Do not claim to have accessed a system or completed an operation
-when you have not.
+Only use the tools and policy sources explicitly provided to you.
+Do not claim to have accessed a system or completed an operation when you have not.
 """.strip()
 
 
@@ -55,4 +239,9 @@ def build_agent() -> Agent:
     return Agent(
         model=model,
         system_prompt=SYSTEM_PROMPT,
+        tools=[
+            search_banking_policy,
+            get_transaction_status,
+            get_loan_status,
+        ],
     )
