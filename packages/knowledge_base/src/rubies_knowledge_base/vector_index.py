@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -42,11 +43,17 @@ def _source_fingerprint(policy_dir: Path) -> str:
     return digest.hexdigest()
 
 
+@lru_cache(maxsize=1)
 def _load_encoder() -> Any:
-    """Load the local embedding model."""
+    """Load and cache the embedding model using configured Hugging Face credentials."""
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(EMBEDDING_MODEL)
+    hf_token = os.getenv("HF_TOKEN", "").strip() or None
+
+    return SentenceTransformer(
+        EMBEDDING_MODEL,
+        token=hf_token,
+    )
 
 
 def build_policy_index(

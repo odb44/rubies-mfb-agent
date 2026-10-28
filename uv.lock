@@ -3384,6 +3384,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pwdlib"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/a6/644f28a21cb68920d06b264e72b864ac9bff2377f4757dd4648b5110b3ad/pwdlib-0.3.1.tar.gz", hash = "sha256:2ffd1955c92190d5bfbdc5071bf7d422568b83f943453ebd3d43d031ccba37b1", size = 216951, upload-time = "2026-08-12T08:38:38.383Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6b/2e/51979293b2337f508597d13ee20db1ac1d43e48086b2ed7de6da213ed46b/pwdlib-0.3.1-py3-none-any.whl", hash = "sha256:944fa439198bed8ac3ea63dac76ea4ae43e2a35f4f21e9e725e82d3c2b97d6a5", size = 9272, upload-time = "2026-08-12T08:38:37.483Z" },
+]
+
+[package.optional-dependencies]
+argon2 = [
+    { name = "argon2-cffi" },
+]
+
+[[package]]
 name = "pycparser"
 version = "3.12"
 source = { registry = "https://pypi.org/simple" }
@@ -4188,7 +4202,9 @@ dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "pwdlib", extra = ["argon2"] },
     { name = "pydantic-settings" },
+    { name = "rubies-observability" },
     { name = "rubies-security" },
     { name = "rubies-shared" },
     { name = "sqlalchemy" },
@@ -4206,7 +4222,9 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.14,<2" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
+    { name = "pwdlib", extras = ["argon2"], specifier = ">=0.2,<1" },
     { name = "pydantic-settings", specifier = ">=2.6,<3" },
+    { name = "rubies-observability", editable = "packages/observability" },
     { name = "rubies-security", editable = "packages/security" },
     { name = "rubies-shared", editable = "packages/shared" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
@@ -4267,6 +4285,7 @@ dependencies = [
     { name = "mcp" },
     { name = "rubies-banking-api" },
     { name = "rubies-loan-model" },
+    { name = "rubies-observability" },
     { name = "rubies-security" },
     { name = "rubies-shared" },
 ]
@@ -4276,6 +4295,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.28,<2" },
     { name = "rubies-banking-api", editable = "apps/banking_api" },
     { name = "rubies-loan-model", editable = "apps/loan_model" },
+    { name = "rubies-observability", editable = "packages/observability" },
     { name = "rubies-security", editable = "packages/security" },
     { name = "rubies-shared", editable = "packages/shared" },
 ]

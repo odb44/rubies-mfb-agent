@@ -130,6 +130,81 @@ class BankingAPIClient:
 
         return payload
 
+    async def _post_json(
+        self,
+        path: str,
+        payload: dict[str, Any],
+        *,
+        resource_name: str,
+        access_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Perform an authenticated JSON POST and validate its response."""
+        token = self._resolve_access_token(access_token)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=False) as client:
+                response = await client.post(
+                    f"{self.base_url}{path}",
+                    headers={**self._request_headers(token), "Content-Type": "application/json"},
+                    json=payload,
+                )
+        except httpx.TimeoutException as exc:
+            raise BankingAPIError("The Banking API request timed out.") from exc
+        except httpx.RequestError as exc:
+            raise BankingAPIError("The Banking API could not be reached.") from exc
+        if response.status_code == 401:
+            raise BankingAPIError("Authentication is required or the session has expired.")
+        if response.status_code == 403:
+            raise BankingAPIError(f"The {resource_name} is not available to this customer.")
+        if response.status_code == 404:
+            raise BankingAPIError(f"{resource_name.capitalize()} not found.")
+        if response.status_code >= 400:
+            detail = ""
+            try:
+                body = response.json()
+                detail = body.get("detail", "") if isinstance(body, dict) else ""
+            except ValueError:
+                pass
+            raise BankingAPIError(str(detail) or f"The Banking API returned HTTP {response.status_code}.")
+        try:
+            result = response.json()
+        except ValueError as exc:
+            raise BankingAPIError("The Banking API returned invalid JSON.") from exc
+        if not isinstance(result, dict):
+            raise BankingAPIError("The Banking API returned an unexpected response.")
+        return result
+
+    async def get_balance(self, account_reference: str, *, access_token: str | None = None) -> dict[str, Any]:
+        """Get the balance of an account scoped by the Banking API to its owner."""
+        reference = account_reference.strip()
+        if not reference:
+            raise ValueError("Account reference is required.")
+        from urllib.parse import quote
+        payload = await self._get(f"/api/accounts/{quote(reference, safe='')}/balance", resource_name="account", access_token=access_token)
+        return payload if payload.get("success") is True else {"success": True, "data": payload}
+
+    async def get_mini_statement(self, account_reference: str, *, limit: int = 10, offset: int = 0, access_token: str | None = None) -> dict[str, Any]:
+        """Get a bounded mini-statement for the authenticated customer's account."""
+        reference = account_reference.strip()
+        if not reference or not 1 <= limit <= 50 or offset < 0:
+            raise ValueError("A valid account reference, limit (1-50), and non-negative offset are required.")
+        from urllib.parse import quote
+        payload = await self._get(f"/api/accounts/{quote(reference, safe='')}/mini-statement?limit={limit}&offset={offset}", resource_name="account statement", access_token=access_token)
+        return {"success": True, "data": payload}
+
+    async def open_dispute(self, *, confirmation_id: str, category: str, description: str, transaction_reference: str | None = None, access_token: str | None = None) -> dict[str, Any]:
+        """Create a dispute after the Banking API validates explicit confirmation."""
+        payload = {"confirmation_id": confirmation_id, "category": category, "description": description}
+        if transaction_reference:
+            payload["transaction_reference"] = transaction_reference
+        result = await self._post_json("/api/disputes", payload, resource_name="dispute", access_token=access_token)
+        return {"success": True, "data": result}
+
+    async def block_card(self, *, card_reference: str, confirmation_id: str, access_token: str | None = None) -> dict[str, Any]:
+        """Block a card after the Banking API validates explicit confirmation."""
+        from urllib.parse import quote
+        result = await self._post_json(f"/api/cards/{quote(card_reference.strip(), safe='')}/block", {"confirmation_id": confirmation_id}, resource_name="card", access_token=access_token)
+        return {"success": True, "data": result}
+
     async def create_support_handoff(
         self,
         *,

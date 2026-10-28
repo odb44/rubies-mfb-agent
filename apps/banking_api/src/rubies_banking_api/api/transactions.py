@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import select
 from rubies_security.identity import (
     CustomerMismatchError,
     IdentityVerificationError,
@@ -18,6 +19,7 @@ from rubies_banking_api.db.database import get_db
 from rubies_banking_api.repositories.customer_repository import (
     CustomerRepository,
 )
+from rubies_banking_api.models.account import Account
 from rubies_banking_api.repositories.transaction_repository import (
     TransactionRepository,
 )
@@ -80,6 +82,39 @@ def _map_customer_error(exc: CustomerMismatchError) -> HTTPException:
         status_code=403,
         detail="The requested resource is not available to this customer.",
     )
+
+
+@router.get("/api/accounts/{account_reference}/balance")
+def get_account_balance(
+    account_reference: str,
+    db: Annotated[Session, Depends(get_db)],
+    identity: Annotated[CustomerIdentity, Depends(get_customer_identity)],
+) -> dict[str, object]:
+    """Return the balance for an account owned by the verified customer."""
+    if not identity.verified:
+        raise HTTPException(status_code=401, detail="A verified customer identity is required.")
+
+    customer = CustomerRepository(db).get_by_reference(identity.customer_id)
+    if customer is None or not customer.is_active:
+        raise HTTPException(status_code=403, detail="The customer account is not available.")
+
+    account = db.scalar(
+        select(Account).where(Account.account_number == account_reference)
+    )
+    if account is None or account.customer_id != customer.id:
+        raise HTTPException(status_code=404, detail="The requested account is not available.")
+    if account.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="The account is not active.")
+
+    return {
+        "success": True,
+        "data": {
+            "account_reference": account.account_number,
+            "balance": str(account.balance),
+            "currency": account.currency,
+            "status": account.status,
+        },
+    }
 
 
 @router.get(

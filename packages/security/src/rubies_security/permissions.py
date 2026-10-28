@@ -10,6 +10,7 @@ from rubies_security.identity import (
 
 
 class BankingAction(StrEnum):
+    VERIFY_CUSTOMER = "verify_customer"
     GET_BALANCE = "get_balance"
     GET_MINI_STATEMENT = "get_mini_statement"
     GET_TRANSACTION_STATUS = "get_transaction_status"

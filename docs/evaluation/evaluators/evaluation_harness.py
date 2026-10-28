@@ -13,7 +13,14 @@ from pathlib import Path
 from typing import Any
 
 from dataset_loader import load_evaluation_datasets
-from evaluator_runner import CaseAdapter, DatasetInput, RunConfig, run_evaluation, sha256_file
+from evaluator_runner import (
+    CaseAdapter,
+    DatasetInput,
+    RunConfig,
+    run_evaluation,
+    sha256_file,
+)
+
 
 SUITE_MAPPING = {
     "rag_questions": ("rag", "rag-policy-questions-v0.2.jsonl", "0.2"),
@@ -32,23 +39,32 @@ def run_harness(
     operator: str | None = None,
     notes: str | None = None,
 ) -> dict[str, Any]:
-    """Load/validate all datasets and run evaluation.
+    """Load datasets, execute configured adapters, and validate the report.
 
-    If adapters are omitted, all cases are marked BLOCKED. Supply adapters only
-    after wiring them to the actual agent and trusted observation providers.
+    Dataset files and schemas are read from docs/evaluation/datasets.
+
+    If adapters are omitted, every defined case is marked BLOCKED.
+    Adapters must be connected to the actual agent and trusted observation
+    providers before the results can be treated as agent evaluation results.
     """
     root = Path(repository_root).resolve()
-    datasets_root = root / "evaluation" / "datasets"
+
+    evaluation_root = root / "docs" / "evaluation"
+    datasets_root = evaluation_root / "datasets"
     schemas_root = datasets_root / "schemas"
+    reports_root = evaluation_root / "reports"
+
     loaded = load_evaluation_datasets(
         datasets_dir=datasets_root,
         schemas_dir=schemas_root,
     )
 
     dataset_inputs: list[DatasetInput] = []
+
     for loader_name, (suite_name, filename, version) in SUITE_MAPPING.items():
         loaded_dataset = loaded[loader_name]
         dataset_path = datasets_root / filename
+
         dataset_inputs.append(
             DatasetInput(
                 suite=suite_name,
@@ -59,22 +75,29 @@ def run_harness(
             )
         )
 
-    report_schema_path = root / "evaluation" / "reports" / "report-schema.json"
+    report_schema_path = reports_root / "report-schema.json"
+
     with report_schema_path.open("r", encoding="utf-8") as handle:
         report_schema = json.load(handle)
+
+    effective_notes = notes
+
+    if effective_notes is None and not adapters:
+        effective_notes = (
+            "No adapters configured: BLOCKED outcomes are expected. "
+            "This run validates dataset loading and report orchestration only. "
+            "The live Rubies MFB agent has not been evaluated."
+        )
 
     config = RunConfig(
         environment=environment,
         application_version=application_version,
         operator=operator,
-        notes=notes or (
-            "No adapters configured: BLOCKED outcomes are expected. "
-            "This run validates dataset loading and report orchestration only."
-            if not adapters else notes
-        ),
+        notes=effective_notes,
         report_schema_path=str(report_schema_path),
         minimum_cases_per_suite=1,
     )
+
     return run_evaluation(
         config=config,
         datasets=dataset_inputs,
@@ -85,59 +108,105 @@ def run_harness(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run evaluation from the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
+
     parser.add_argument(
         "--root",
         type=Path,
         default=Path.cwd(),
-        help="Repository root containing evaluation/datasets and evaluation/reports.",
+        help="Repository root containing docs/evaluation/datasets and reports.",
     )
+
     parser.add_argument(
         "--report",
         type=Path,
-        default=Path("evaluation/reports/latest-evaluation-report.json"),
-        help="Output report path (relative paths are resolved from --root).",
+        default=Path(
+            "docs/evaluation/reports/latest-evaluation-report.json"
+        ),
+        help=(
+            "Output report path. Relative paths are resolved from "
+            "--root."
+        ),
     )
-    parser.add_argument("--application-version", default="not-connected")
-    parser.add_argument("--environment", default="local")
-    parser.add_argument("--operator", default=None)
-    parser.add_argument("--notes", default=None)
+
+    parser.add_argument(
+        "--application-version",
+        default="not-connected",
+    )
+
+    parser.add_argument(
+        "--environment",
+        default="local",
+    )
+
+    parser.add_argument(
+        "--operator",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--notes",
+        default=None,
+    )
+
     args = parser.parse_args(argv)
 
-    report_path = args.report if args.report.is_absolute() else args.root / args.report
+    root = args.root.resolve()
+
+    report_path = (
+        args.report
+        if args.report.is_absolute()
+        else root / args.report
+    )
+
     try:
         report = run_harness(
-            repository_root=args.root,
+            repository_root=root,
             report_path=report_path,
             application_version=args.application_version,
             environment=args.environment,
             operator=args.operator,
             notes=args.notes,
         )
+
     except Exception as exc:
         print(
-            f"Evaluation harness stopped safely: {type(exc).__name__}: {exc}",
+            "Evaluation harness stopped safely: "
+            f"{type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
         return 2
 
-    print(json.dumps({
-        "report_path": str(report_path.resolve()),
-        "decision": report["decision"]["status"],
-        "summary": report["summary"],
-        "suites": [
+    summary = report["summary"]
+
+    print(
+        json.dumps(
             {
-                "suite": suite["suite"],
-                "defined": suite["defined"],
-                "blocked": suite["blocked"],
-                "needs_review": suite["needs_review"],
-                "passed": suite["passed"],
-                "failed": suite["failed"],
-            }
-            for suite in report["suites"]
-        ],
-    }, indent=2))
-    return 0 if report["decision"]["status"] == "ACCEPT" else 1
+                "report_path": str(report_path.resolve()),
+                "decision": report["decision"]["status"],
+                "summary": summary,
+                "suites": [
+                    {
+                        "suite": suite["suite"],
+                        "defined": suite["defined"],
+                        "blocked": suite["blocked"],
+                        "needs_review": suite["needs_review"],
+                        "passed": suite["passed"],
+                        "failed": suite["failed"],
+                    }
+                    for suite in report["suites"]
+                ],
+            },
+            indent=2,
+        )
+    )
+
+    return (
+        0
+        if report["decision"]["status"] == "ACCEPT"
+        else 1
+    )
 
 
 if __name__ == "__main__":

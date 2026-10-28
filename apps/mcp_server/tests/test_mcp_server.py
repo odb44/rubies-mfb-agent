@@ -325,3 +325,18 @@ def test_handoff_tool_handles_banking_api_failure(monkeypatch) -> None:
                 assert payload.get("success") is not True
 
     asyncio.run(scenario())
+
+def test_mcp_registers_all_nine_agreed_tools(monkeypatch) -> None:
+    async def scenario() -> None:
+        _mock_authentication(monkeypatch)
+        server = create_server(FakeBankingClient(), token_settings=_test_token_settings())
+        expected = {
+            "verify_customer", "get_balance", "get_mini_statement",
+            "get_transaction_status", "open_dispute", "block_card",
+            "check_loan_eligibility", "get_loan_status", "handoff_to_human",
+        }
+        async with create_connected_server_and_client_session(server._mcp_server) as client_session:
+            tools = await client_session.list_tools()
+            actual = {tool.name for tool in tools.tools}
+            assert actual == expected
+    asyncio.run(scenario())

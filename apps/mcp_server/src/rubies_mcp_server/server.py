@@ -246,9 +246,14 @@ def _check_tool_access(
     """Authenticate the caller and restrict access to registered tools."""
 
     allowed_tools = {
+        "verify_customer",
+        "get_balance",
+        "get_mini_statement",
         "get_transaction_status",
-        "get_loan_status",
+        "open_dispute",
+        "block_card",
         "check_loan_eligibility",
+        "get_loan_status",
         "handoff_to_human",
     }
 
@@ -368,6 +373,76 @@ def create_server(
         auth=mcp_auth_settings,
         stateless_http=True,
     )
+
+    @server.tool()
+    async def verify_customer() -> dict[str, Any]:
+        """Confirm that the current request has a verified trusted identity."""
+        started_at = _tool_started()
+        try:
+            customer_id, _session_id = _check_tool_access("verify_customer", settings)
+            _tool_succeeded("verify_customer", started_at)
+            return {"success": True, "verified": True, "customer_reference": customer_id}
+        except Exception as exc:
+            _tool_failed("verify_customer", started_at, exc)
+            raise
+
+    @server.tool()
+    async def get_balance(account_reference: str) -> dict[str, Any]:
+        """Retrieve the balance of an account owned by the authenticated customer."""
+        started_at = _tool_started()
+        try:
+            _check_tool_access("get_balance", settings)
+            result = await client.get_balance(account_reference, access_token=_get_request_token())
+            _tool_succeeded("get_balance", started_at)
+            return result
+        except Exception as exc:
+            _tool_failed("get_balance", started_at, exc)
+            raise
+
+    @server.tool()
+    async def get_mini_statement(account_reference: str, limit: int = 10, offset: int = 0) -> dict[str, Any]:
+        """Retrieve a bounded mini-statement for the authenticated customer's account."""
+        started_at = _tool_started()
+        try:
+            _check_tool_access("get_mini_statement", settings)
+            if not 1 <= limit <= 50 or offset < 0:
+                return {"success": False, "status": "INVALID_INPUT", "message": "Limit must be 1-50 and offset cannot be negative."}
+            result = await client.get_mini_statement(account_reference, limit=limit, offset=offset, access_token=_get_request_token())
+            _tool_succeeded("get_mini_statement", started_at)
+            return result
+        except Exception as exc:
+            _tool_failed("get_mini_statement", started_at, exc)
+            raise
+
+    @server.tool()
+    async def open_dispute(confirmation_id: str, category: str, description: str, transaction_reference: str | None = None) -> dict[str, Any]:
+        """Submit a dispute only with a server-approved, action-bound confirmation ID."""
+        started_at = _tool_started()
+        try:
+            _check_tool_access("open_dispute", settings)
+            if not confirmation_id.strip() or not category.strip() or not description.strip():
+                return {"success": False, "status": "INVALID_INPUT", "message": "Confirmation, category, and description are required."}
+            result = await client.open_dispute(confirmation_id=confirmation_id, category=category, description=description, transaction_reference=transaction_reference, access_token=_get_request_token())
+            _tool_succeeded("open_dispute", started_at)
+            return result
+        except Exception as exc:
+            _tool_failed("open_dispute", started_at, exc)
+            raise
+
+    @server.tool()
+    async def block_card(card_reference: str, confirmation_id: str) -> dict[str, Any]:
+        """Block a card only with a server-approved, action-bound confirmation ID."""
+        started_at = _tool_started()
+        try:
+            _check_tool_access("block_card", settings)
+            if not card_reference.strip() or not confirmation_id.strip():
+                return {"success": False, "status": "INVALID_INPUT", "message": "Card reference and confirmation ID are required."}
+            result = await client.block_card(card_reference=card_reference, confirmation_id=confirmation_id, access_token=_get_request_token())
+            _tool_succeeded("block_card", started_at)
+            return result
+        except Exception as exc:
+            _tool_failed("block_card", started_at, exc)
+            raise
 
     @server.tool()
     async def get_transaction_status(
@@ -722,7 +797,7 @@ def create_server(
     _record_event(
         event="mcp_server_created",
         outcome="success",
-        registered_tool_count=4,
+        registered_tool_count=9,
     )
 
     return server

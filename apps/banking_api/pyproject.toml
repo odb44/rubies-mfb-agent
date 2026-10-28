@@ -13,6 +13,7 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "alembic>=1.14,<2",
     "pydantic-settings>=2.6,<3",
+    "pwdlib[argon2]>=0.2,<1",
 ]
 
 [build-system]

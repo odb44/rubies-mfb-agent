@@ -55,7 +55,7 @@ def _get_request_access_token() -> str:
 
 async def _call_banking_tool(
     tool_name: str,
-    arguments: dict[str, str],
+    arguments: dict[str, Any],
 ) -> dict[str, Any]:
     """Call an authenticated banking MCP tool for the current customer."""
     started = perf_counter()
@@ -65,7 +65,7 @@ async def _call_banking_tool(
         token = _get_request_access_token()
         mcp_url = os.getenv(
             "MCP_SERVER_URL",
-            "http://127.0.0.1:8001/mcp",
+            "http://127.0.0.1:8002/mcp",
         ).strip()
 
         if not mcp_url:
@@ -171,6 +171,62 @@ def search_banking_policy(query: str) -> dict[str, Any]:
 
 
 @tool
+async def verify_customer() -> dict[str, Any]:
+    """Verify that the active authenticated customer session is trusted."""
+    try:
+        return await _call_banking_tool("verify_customer", {})
+    except RuntimeError as exc:
+        return {"success": False, "verified": False, "error": str(exc)}
+
+
+@tool
+async def get_balance(account_reference: str) -> dict[str, Any]:
+    """Retrieve an account balance for the authenticated customer."""
+    if not account_reference.strip():
+        return {"success": False, "error": "A valid account reference is required."}
+    try:
+        return await _call_banking_tool("get_balance", {"account_reference": account_reference.strip()})
+    except RuntimeError as exc:
+        return {"success": False, "error": str(exc)}
+
+
+@tool
+async def get_mini_statement(account_reference: str, limit: int = 10, offset: int = 0) -> dict[str, Any]:
+    """Retrieve recent transactions for the authenticated customer's account."""
+    if not account_reference.strip() or not 1 <= limit <= 50 or offset < 0:
+        return {"success": False, "error": "Provide a valid account reference, limit 1-50, and non-negative offset."}
+    try:
+        return await _call_banking_tool("get_mini_statement", {"account_reference": account_reference.strip(), "limit": limit, "offset": offset})
+    except RuntimeError as exc:
+        return {"success": False, "error": str(exc)}
+
+
+@tool
+async def open_dispute(confirmation_id: str, category: str, description: str, transaction_reference: str | None = None) -> dict[str, Any]:
+    """Submit a dispute only after the server has approved the action-bound confirmation."""
+    if not confirmation_id.strip() or not category.strip() or not description.strip():
+        return {"success": False, "error": "A valid confirmation, category, and description are required."}
+    arguments: dict[str, Any] = {"confirmation_id": confirmation_id, "category": category, "description": description}
+    if transaction_reference:
+        arguments["transaction_reference"] = transaction_reference
+    try:
+        return await _call_banking_tool("open_dispute", arguments)
+    except RuntimeError as exc:
+        return {"success": False, "error": str(exc)}
+
+
+@tool
+async def block_card(card_reference: str, confirmation_id: str) -> dict[str, Any]:
+    """Block a card only after the server validates explicit action confirmation."""
+    if not card_reference.strip() or not confirmation_id.strip():
+        return {"success": False, "error": "Card reference and approved confirmation are required."}
+    try:
+        return await _call_banking_tool("block_card", {"card_reference": card_reference, "confirmation_id": confirmation_id})
+    except RuntimeError as exc:
+        return {"success": False, "error": str(exc)}
+
+
+@tool
 async def get_transaction_status(
     transaction_reference: str,
 ) -> dict[str, Any]:
@@ -262,6 +318,25 @@ async def check_loan_eligibility(
 
 
 
+@tool
+async def handoff_to_human(reason: str, summary: str, route: str = "GENERAL_HUMAN_SUPPORT", priority: str = "P3", actions_attempted: list[str] | None = None, unresolved_questions: list[str] | None = None) -> dict[str, Any]:
+    """Create a support handoff when the customer requests a person or the issue needs human review."""
+    if not reason.strip() or not summary.strip():
+        return {"success": False, "error": "A reason and concise summary are required."}
+    arguments: dict[str, Any] = {
+        "reason": reason,
+        "summary": summary,
+        "route": route,
+        "priority": priority,
+        "actions_attempted": actions_attempted or [],
+        "unresolved_questions": unresolved_questions or [],
+    }
+    try:
+        return await _call_banking_tool("handoff_to_human", arguments)
+    except RuntimeError as exc:
+        return {"success": False, "error": str(exc)}
+
+
 SYSTEM_PROMPT = """
 You are the Rubies MFB Customer Support Agent.
 
@@ -289,6 +364,9 @@ Policy retrieval:
 - Policy retrieval does not provide customer-specific account records.
 
 Banking tools:
+- Use verify_customer to confirm the current authenticated session before sensitive support actions.
+- Use get_balance and get_mini_statement only with an account reference supplied by the customer; the Banking API enforces ownership.
+- Use open_dispute and block_card only when a server-approved confirmation ID exists for the exact action and target. Never invent or bypass confirmation IDs.
 - Use get_transaction_status for transaction-status enquiries.
 - Use get_loan_status for loan-status enquiries.
 - Report banking results only when a trusted banking service returns them.
@@ -338,8 +416,14 @@ def build_agent() -> Agent:
         system_prompt=SYSTEM_PROMPT,
         tools=[
             search_banking_policy,
+            verify_customer,
+            get_balance,
+            get_mini_statement,
             get_transaction_status,
-            get_loan_status,
+            open_dispute,
+            block_card,
             check_loan_eligibility,
+            get_loan_status,
+            handoff_to_human,
         ],
     )

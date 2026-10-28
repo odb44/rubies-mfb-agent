@@ -5,12 +5,14 @@ import re
 import time
 import uuid
 
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Request
 
 from rubies_observability import (
     configure_logging,
     correlation_context,
     log_event,
+    record_metric,
 )
 
 from rubies_banking_api.api.cards import router as cards_router
@@ -20,6 +22,7 @@ from rubies_banking_api.api.support_handoffs import (
     router as support_handoffs_router,
 )
 from rubies_banking_api.api.loans import router as loans_router
+from rubies_banking_api.api.authentication import router as authentication_router
 from rubies_banking_api.config import get_settings
 
 
@@ -34,12 +37,23 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(cards_router)
 app.include_router(disputes_router)
 app.include_router(transactions_router)
 app.include_router(loans_router)
 app.include_router(support_handoffs_router)
+app.include_router(authentication_router)
 
 
 CORRELATION_ID_HEADER = "X-Correlation-ID"
@@ -61,7 +75,7 @@ async def observe_requests(
     request: Request,
     call_next,
 ):
-    """Log request outcomes and return the correlation ID to the caller."""
+    """Log and measure request outcomes and return the correlation ID."""
     correlation_id = _get_correlation_id(request)
     start = time.perf_counter()
 
@@ -70,6 +84,8 @@ async def observe_requests(
             response = await call_next(request)
 
         except Exception as exc:
+            duration_ms = (time.perf_counter() - start) * 1000
+
             log_event(
                 logger,
                 component="banking_api",
@@ -82,38 +98,54 @@ async def observe_requests(
                     if request.scope.get("route")
                     else "unmatched",
                 },
-                duration_ms=(time.perf_counter() - start) * 1000,
+                duration_ms=duration_ms,
                 exception_type=type(exc).__name__,
             )
+
+            record_metric(
+                component="banking_api",
+                operation="http_request",
+                outcome="error",
+                duration_ms=duration_ms,
+            )
+
             raise
 
         response.headers[CORRELATION_ID_HEADER] = correlation_id
 
         route = request.scope.get("route")
         route_template = getattr(route, "path", "unmatched")
+        duration_ms = (time.perf_counter() - start) * 1000
+
+        if response.status_code < 400:
+            outcome = "success"
+            log_level = logging.INFO
+        elif response.status_code < 500:
+            outcome = "failure"
+            log_level = logging.WARNING
+        else:
+            outcome = "error"
+            log_level = logging.ERROR
 
         log_event(
             logger,
             component="banking_api",
             event="http.request.completed",
-            outcome=(
-                "success"
-                if response.status_code < 400
-                else "error"
-            ),
-            level=(
-                logging.ERROR
-                if response.status_code >= 500
-                else logging.WARNING
-                if response.status_code >= 400
-                else logging.INFO
-            ),
+            outcome=outcome,
+            level=log_level,
             metadata={
                 "method": request.method,
                 "route": route_template,
                 "status_code": response.status_code,
             },
-            duration_ms=(time.perf_counter() - start) * 1000,
+            duration_ms=duration_ms,
+        )
+
+        record_metric(
+            component="banking_api",
+            operation="http_request",
+            outcome=outcome,
+            duration_ms=duration_ms,
         )
 
         return response

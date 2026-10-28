@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_name: str = "Rubies MFB Banking API"
     app_version: str = "0.1.0"
     environment: str = "development"
+
     database_url: str = (
         "postgresql+psycopg://rubies:rubies_dev@localhost:5432/rubies_mfb"
     )
@@ -25,11 +26,14 @@ class Settings(BaseSettings):
     )
 
     def validate_jwt_configuration(self) -> None:
-        """Reject unsafe or incomplete JWT configuration when authentication is used."""
         if len(self.jwt_secret_key) < 32:
-            raise ValueError("JWT_SECRET_KEY must contain at least 32 characters.")
+            raise ValueError(
+                "JWT_SECRET_KEY must contain at least 32 characters."
+            )
+
         if not self.jwt_issuer.strip():
             raise ValueError("JWT_ISSUER must not be empty.")
+
         if not self.jwt_audience.strip():
             raise ValueError("JWT_AUDIENCE must not be empty.")
 

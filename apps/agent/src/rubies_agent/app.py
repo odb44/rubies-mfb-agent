@@ -15,8 +15,10 @@ from rubies_observability import (
     configure_logging,
     correlation_context,
     log_event,
+    record_metric,
 )
 from strands import Agent
+from fastapi.middleware.cors import CORSMiddleware
 
 from rubies_agent.runtime import (
     build_agent,
@@ -33,7 +35,6 @@ logger = logging.getLogger("rubies.agent")
 
 def resolve_correlation_id(request: Request) -> str:
     """Use a valid incoming correlation ID or generate a new one."""
-
     incoming_id = request.headers.get(CORRELATION_HEADER, "").strip()
 
     if CORRELATION_ID_PATTERN.fullmatch(incoming_id):
@@ -47,7 +48,6 @@ async def require_authenticated_customer(
     identity=Depends(get_customer_identity),  # noqa: B008
 ) -> AsyncIterator[Any]:
     """Authenticate the customer and scope their token to this request."""
-
     authorization = request.headers.get("authorization", "")
     scheme, separator, token = authorization.partition(" ")
 
@@ -71,7 +71,6 @@ async def build_invocation_state(
     input_data: RunAgentInput,
 ) -> dict[str, Any]:
     """Build trusted server-side context for an agent invocation."""
-
     identity = getattr(request.state, "customer_identity", None)
 
     if identity is None:
@@ -86,7 +85,6 @@ async def build_invocation_state(
 
 def create_app(agent: Agent | None = None) -> FastAPI:
     """Create the application with a configured or injected agent."""
-
     agent_template = agent if agent is not None else build_agent()
 
     agui_agent = StrandsAgent(
@@ -98,15 +96,23 @@ def create_app(agent: Agent | None = None) -> FastAPI:
         title="Rubies MFB Customer Support Agent",
         version="0.1.0",
     )
-
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.middleware("http")
     async def correlation_middleware(
         request: Request,
         call_next,
     ) -> Response:
-        """Attach a correlation ID to the request and its log events."""
-
+        """Correlate, log, and measure every HTTP request."""
         correlation_id = resolve_correlation_id(request)
         request.state.correlation_id = correlation_id
         started_at = time.perf_counter()
@@ -114,53 +120,23 @@ def create_app(agent: Agent | None = None) -> FastAPI:
         route = request.scope.get("route")
         route_path = getattr(route, "path", "unmatched")
 
-        try:
-            with correlation_context(correlation_id):
+        with correlation_context(correlation_id):
+            try:
                 response = await call_next(request)
-
+            except Exception as exc:
                 duration_ms = round(
                     (time.perf_counter() - started_at) * 1000,
                     2,
                 )
 
-                response.headers[CORRELATION_HEADER] = correlation_id
-
                 try:
                     log_event(
                         logger,
-                        "http_request",
                         component="agent",
-                        outcome=(
-                            "success"
-                            if response.status_code < 500
-                            else "failure"
-                        ),
+                        event="http_request",
+                        outcome="error",
+                        level=logging.ERROR,
                         duration_ms=duration_ms,
-                        metadata={
-                            "method": request.method,
-                            "route": route_path,
-                            "status_code": response.status_code,
-                        },
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to record agent HTTP request."
-                    )
-
-                return response
-
-        except Exception as exc:
-            try:
-                with correlation_context(correlation_id):
-                    log_event(
-                        logger,
-                        "http_request",
-                        component="agent",
-                        outcome="failure",
-                        duration_ms=round(
-                            (time.perf_counter() - started_at) * 1000,
-                            2,
-                        ),
                         exception_type=type(exc).__name__,
                         metadata={
                             "method": request.method,
@@ -168,13 +144,62 @@ def create_app(agent: Agent | None = None) -> FastAPI:
                             "status_code": 500,
                         },
                     )
+                    record_metric(
+                        component="agent",
+                        operation="http_request",
+                        outcome="error",
+                        duration_ms=duration_ms,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to record agent HTTP request failure."
+                    )
+
+                raise
+
+            duration_ms = round(
+                (time.perf_counter() - started_at) * 1000,
+                2,
+            )
+
+            response.headers[CORRELATION_HEADER] = correlation_id
+
+            if response.status_code < 400:
+                outcome = "success"
+                log_level = logging.INFO
+            elif response.status_code < 500:
+                outcome = "failure"
+                log_level = logging.WARNING
+            else:
+                outcome = "error"
+                log_level = logging.ERROR
+
+            try:
+                log_event(
+                    logger,
+                    component="agent",
+                    event="http_request",
+                    outcome=outcome,
+                    level=log_level,
+                    duration_ms=duration_ms,
+                    metadata={
+                        "method": request.method,
+                        "route": route_path,
+                        "status_code": response.status_code,
+                    },
+                )
+                record_metric(
+                    component="agent",
+                    operation="http_request",
+                    outcome=outcome,
+                    duration_ms=duration_ms,
+                )
             except Exception:
                 logger.exception(
-                    "Failed to record agent HTTP request failure."
+                    "Failed to record agent HTTP request metrics."
                 )
 
-            raise
-
+            return response
 
     add_strands_fastapi_endpoint(
         app,
