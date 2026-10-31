@@ -1,0 +1,218 @@
+﻿Scenario: TOOL-001
+Name: Verified balance lookup
+HTTP Status: 200
+Timestamp: 2026-10-28 14:27:13
+
+data: {"type":"RUN_STARTED","threadId":"fcf0804f-e647-4a7d-a773-08dd28a4f808","runId":"fb70a9f4-ccbc-45ba-bb11-ed6f050981c0","protocolVersion":"1.0"}
+
+data: {"type":"MESSAGES_SNAPSHOT","messages":[{"id":"64971fc2-f2a0-4054-8e43-b296af7ab1b5","role":"user","content":"Please check my account balance."}]}
+
+data: {"type":"TEXT_MESSAGE_START","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","role":"assistant"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"I understand"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" you'd"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" like to check your account balance. However"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":", I don"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"'t have access to a"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" tool"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" that can retrieve account"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" balance"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" information directly"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"."}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"\n\n**"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"Here"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"'s what I can help"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" you with:**"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"\n\n-"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" **Transaction"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" status"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"**:"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" If"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" you have"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" a specific"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" transaction reference number"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":", I can check the status of that"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" transaction for"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" you\n- **Loan status**:"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" If you have a loan reference, I"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" can check your"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" loan status"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"\n- **Banking"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" policies**: I can answer"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" questions about our"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" banking policies and"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" procedures"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"\n\n**To"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" check your account balance, I recommend"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":":**"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"\n\n1. **Log"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" into your"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" Rubies MFB online"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" banking portal"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" or"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" mobile"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" app**"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" - Your"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" current"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" balance will"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" be displayed on"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" your"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" account dashboard"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"\n2. **Visit"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" any"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" Rubies MFB branch**"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" - Our"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" staff"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" can assist"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" you with"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" your"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" balance"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" inquiry\n3. **Call our customer"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" service hot"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"line** - Our"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" phone"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" support"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" team can verify"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" your identity"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" and provide"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" your"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" balance"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"\n4. **Use"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" an"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" AT"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"M** - You can check"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" your balance at any"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" Rubies MFB ATM"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"\n\nFor"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" security"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" reasons, I cannot"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" retrieve"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" or"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" display"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" account bal"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":"ances through"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" this"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" channel"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":","}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" as it would"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" require"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" access to sensitive"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" account"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" information that"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" must"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" be properly"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" secured"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":".\n\nIs there anything else I can"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" help you with today"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":","}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" such as checking a specific transaction or explaining"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","delta":" our banking policies?"}
+
+data: {"type":"RAW","event":{"event":{"metadata":{"usage":{"inputTokens":1462,"outputTokens":275,"totalTokens":1737},"metrics":{"latencyMs":8191}}}},"source":"strands"}
+
+data: {"type":"TEXT_MESSAGE_END","messageId":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e"}
+
+data: {"type":"MESSAGES_SNAPSHOT","messages":[{"id":"64971fc2-f2a0-4054-8e43-b296af7ab1b5","role":"user","content":"Please check my account balance."},{"id":"d67278e3-03b3-4bd4-8a31-3c73bcc3dd3e","role":"assistant","content":"I understand you'd like to check your account balance. However, I don't have access to a tool that can retrieve account balance information directly.\n\n**Here's what I can help you with:**\n\n- **Transaction status**: If you have a specific transaction reference number, I can check the status of that transaction for you\n- **Loan status**: If you have a loan reference, I can check your loan status\n- **Banking policies**: I can answer questions about our banking policies and procedures\n\n**To check your account balance, I recommend:**\n\n1. **Log into your Rubies MFB online banking portal or mobile app** - Your current balance will be displayed on your account dashboard\n2. **Visit any Rubies MFB branch** - Our staff can assist you with your balance inquiry\n3. **Call our customer service hotline** - Our phone support team can verify your identity and provide your balance\n4. **Use an ATM** - You can check your balance at any Rubies MFB ATM\n\nFor security reasons, I cannot retrieve or display account balances through this channel, as it would require access to sensitive account information that must be properly secured.\n\nIs there anything else I can help you with today, such as checking a specific transaction or explaining our banking policies?"}]}
+
+data: {"type":"STATE_SNAPSHOT","snapshot":{}}
+
+data: {"type":"RUN_FINISHED","threadId":"fcf0804f-e647-4a7d-a773-08dd28a4f808","runId":"fb70a9f4-ccbc-45ba-bb11-ed6f050981c0","outcome":{"type":"success"},"usage":[{"provider":"bedrock","model":"us.anthropic.claude-sonnet-4-5-20250929-v1:0","inputTokens":1462,"outputTokens":275,"totalTokens":1737}]}
+
+.Content

@@ -306,3 +306,81 @@ def test_transaction_status_requires_authentication():
         )
 
     assert response.status_code == 401
+
+def test_get_my_accounts_returns_only_active_customer_accounts(
+    client,
+    db_session,
+):
+    customer = Mock()
+    customer.id = 1
+    customer.is_active = True
+
+    account = Mock()
+    account.account_number = "0123456789"
+    account.currency = "NGN"
+    account.status = "ACTIVE"
+
+    db_session.scalar.return_value = customer
+    db_session.scalars.return_value.all.return_value = [account]
+
+    response = client.get("/api/accounts/me")
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["count"] == 1
+    assert body["data"]["accounts"] == [
+        {
+            "account_reference": "0123456789",
+            "currency": "NGN",
+            "status": "ACTIVE",
+        }
+    ]
+
+
+def test_get_my_accounts_returns_empty_list_when_no_active_accounts(
+    client,
+    db_session,
+):
+    customer = Mock()
+    customer.id = 1
+    customer.is_active = True
+
+    db_session.scalar.return_value = customer
+    db_session.scalars.return_value.all.return_value = []
+
+    response = client.get("/api/accounts/me")
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["count"] == 0
+    assert body["data"]["accounts"] == []
+
+
+def test_get_my_accounts_rejects_missing_customer(
+    client,
+    db_session,
+):
+    db_session.scalar.return_value = None
+
+    response = client.get("/api/accounts/me")
+
+    assert response.status_code == 403
+
+
+def test_get_my_accounts_rejects_inactive_customer(
+    client,
+    db_session,
+):
+    customer = Mock()
+    customer.id = 1
+    customer.is_active = False
+
+    db_session.scalar.return_value = customer
+
+    response = client.get("/api/accounts/me")
+
+    assert response.status_code == 403    

@@ -11,6 +11,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
+import sys
 
 correlation_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "rubies_correlation_id",
@@ -143,12 +144,13 @@ class JsonFormatter(logging.Formatter):
         )
 
 
+
 def configure_logging(
     *,
     level: str = "INFO",
     logger_name: str = "rubies",
 ) -> logging.Logger:
-    """Configure a JSON logger without adding duplicate handlers."""
+    """Configure a UTF-8 JSON logger without duplicate handlers."""
     logger = logging.getLogger(logger_name)
     logger.setLevel(level.upper())
     logger.propagate = False
@@ -157,7 +159,20 @@ def configure_logging(
         getattr(handler, "_rubies_json_handler", False)
         for handler in logger.handlers
     ):
-        handler = logging.StreamHandler()
+        stream = sys.stderr
+
+        # Preserve the original stream while enabling UTF-8 output
+        # where the runtime supports reconfiguration.
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(
+                    encoding="utf-8",
+                    errors="backslashreplace",
+                )
+            except (OSError, ValueError):
+                pass
+
+        handler = logging.StreamHandler(stream)
         handler.setFormatter(JsonFormatter())
         handler._rubies_json_handler = True  # type: ignore[attr-defined]
         logger.addHandler(handler)

@@ -24,7 +24,9 @@ from rubies_banking_api.api.support_handoffs import (
 from rubies_banking_api.api.loans import router as loans_router
 from rubies_banking_api.api.authentication import router as authentication_router
 from rubies_banking_api.config import get_settings
-
+from rubies_banking_api.api.confirmations import (
+    router as confirmations_router,
+)
 
 settings = get_settings()
 
@@ -48,6 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(confirmations_router)
 app.include_router(cards_router)
 app.include_router(disputes_router)
 app.include_router(transactions_router)

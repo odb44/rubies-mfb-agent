@@ -19,6 +19,8 @@ from rubies_observability import (
 )
 from strands import Agent
 from fastapi.middleware.cors import CORSMiddleware
+from rubies_observability import get_metrics_snapshot
+from rubies_observability.model_metrics import model_metrics
 
 from rubies_agent.runtime import (
     build_agent,
@@ -214,4 +216,46 @@ def create_app(agent: Agent | None = None) -> FastAPI:
         """Report application health without invoking the model."""
         return {"status": "ok"}
 
+
+    @app.get("/api/observability/summary")
+    def observability_summary() -> dict[str, Any]:
+        """Return aggregated in-process metrics for the dashboard."""
+        snapshot = get_metrics_snapshot()
+
+        requests = snapshot["requests"]
+        durations = snapshot["durations"]
+
+        total_requests = sum(item["count"] for item in requests)
+        successes = sum(
+            item["count"]
+            for item in requests
+            if item["outcome"] == "success"
+        )
+        failures = sum(
+            item["count"]
+            for item in requests
+            if item["outcome"] in {"failure", "error", "timeout"}
+        )
+
+        duration_count = sum(item["count"] for item in durations)
+        total_duration = sum(item["total_ms"] for item in durations)
+
+        return {
+            "status": "ok",
+            "scope": "in_process",
+            "summary": {
+                "totalRequests": total_requests,
+                "successes": successes,
+                "failures": failures,
+                "averageLatencyMs": (
+                    round(total_duration / duration_count, 2)
+                    if duration_count
+                    else 0
+                ),
+            },
+            "requests": requests,
+            "durations": durations,
+            "modelUsage": model_metrics.snapshot(),
+        }
+    
     return app

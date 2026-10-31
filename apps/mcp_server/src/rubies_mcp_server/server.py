@@ -83,19 +83,18 @@ def _record_event(
 
     try:
         log_event(
-            LOGGER,
-            component="mcp_server",
-            event=event,
-            outcome=outcome,
-            duration_ms=duration_ms,
-            exception_type=(
-                type(exception).__name__
-                if exception is not None
-                else None
-            ),
-            correlation_id=get_correlation_id(),
-            metadata=safe_metadata,
-        )
+    LOGGER,
+    component="mcp_server",
+    event=event,
+    outcome=outcome,
+    duration_ms=duration_ms,
+    exception_type=(
+        type(exception).__name__
+        if exception is not None
+        else None
+    ),
+    metadata=safe_metadata,
+)
     except Exception:
         # Observability failures must not change banking-tool behaviour.
         LOGGER.warning(
@@ -247,11 +246,14 @@ def _check_tool_access(
 
     allowed_tools = {
         "verify_customer",
+        "get_customer_accounts",
         "get_balance",
         "get_mini_statement",
         "get_transaction_status",
         "open_dispute",
         "block_card",
+        "create_confirmation",
+        "approve_confirmation",
         "check_loan_eligibility",
         "get_loan_status",
         "handoff_to_human",
@@ -371,6 +373,8 @@ def create_server(
         name="Rubies MFB Banking Tools",
         token_verifier=RubiesTokenVerifier(settings),
         auth=mcp_auth_settings,
+        host=os.environ.get("MCP_HOST", "127.0.0.1"),
+        port=int(os.environ.get("MCP_PORT", "8002")),
         stateless_http=True,
     )
 
@@ -385,6 +389,25 @@ def create_server(
         except Exception as exc:
             _tool_failed("verify_customer", started_at, exc)
             raise
+
+
+    @server.tool()
+    async def get_customer_accounts() -> dict[str, Any]:
+        """Retrieve active accounts belonging to the authenticated customer."""
+        started_at = _tool_started()
+        try:
+            _check_tool_access("get_customer_accounts", settings)
+
+            result = await client.get_customer_accounts(
+                access_token=_get_request_token(),
+            )
+
+            _tool_succeeded("get_customer_accounts", started_at)
+            return result
+
+        except Exception as exc:
+            _tool_failed("get_customer_accounts", started_at, exc)
+            raise    
 
     @server.tool()
     async def get_balance(account_reference: str) -> dict[str, Any]:
@@ -443,6 +466,59 @@ def create_server(
         except Exception as exc:
             _tool_failed("block_card", started_at, exc)
             raise
+    
+    @server.tool()
+    async def create_confirmation(
+        action: str,
+        payload: dict[str, str],
+    ) -> dict[str, Any]:
+        """Create a pending confirmation for a sensitive banking action."""
+        started_at = _tool_started()
+        try:
+            _check_tool_access("create_confirmation", settings)
+
+            result = await client.create_confirmation(
+                action=action,
+                payload=payload,
+                access_token=_get_request_token(),
+            )
+
+            _tool_succeeded("create_confirmation", started_at)
+            return result
+        except Exception as exc:
+            _tool_failed("create_confirmation", started_at, exc)
+            raise
+
+    @server.tool()
+    async def approve_confirmation(
+        confirmation_id: str,
+        action: str,
+        payload: dict[str, str],
+    ) -> dict[str, Any]:
+        """Approve a confirmation after the customer explicitly agrees."""
+        started_at = _tool_started()
+        try:
+            _check_tool_access("approve_confirmation", settings)
+
+            if not confirmation_id.strip():
+                return {
+                    "success": False,
+                    "status": "INVALID_INPUT",
+                    "message": "Confirmation ID is required.",
+                }
+
+            result = await client.approve_confirmation(
+                confirmation_id=confirmation_id,
+                action=action,
+                payload=payload,
+                access_token=_get_request_token(),
+            )
+
+            _tool_succeeded("approve_confirmation", started_at)
+            return result
+        except Exception as exc:
+            _tool_failed("approve_confirmation", started_at, exc)
+            raise
 
     @server.tool()
     async def get_transaction_status(
@@ -498,128 +574,49 @@ def create_server(
             )
             raise
 
+
     @server.tool()
-    async def check_loan_eligibility(
-        applicant_data: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Run the historical loan-model demonstration.
+    async def check_loan_eligibility() -> dict[str, Any]:
+        """Check preliminary eligibility using existing authenticated
+        customer data and approved lending criteria.
 
-        This tool does not make an official Rubies MFB lending decision.
+        This tool must not use the historical demonstration model to make
+        an actual lending decision.
         """
-
         started_at = _tool_started()
 
         try:
             _check_tool_access("check_loan_eligibility", settings)
 
-            if not isinstance(applicant_data, dict):
-                result = {
-                    "success": False,
-                    "status": "INVALID_INPUT",
-                    "error": (
-                        "Applicant information must be provided "
-                        "as an object."
-                    ),
-                }
-                _tool_succeeded(
-                    "check_loan_eligibility",
-                    started_at,
-                )
-                return result
-
-            missing_fields = sorted(
-                field
-                for field in LOAN_APPLICANT_FIELDS
-                if field not in applicant_data
-                or applicant_data[field] is None
-                or (
-                    isinstance(applicant_data[field], str)
-                    and not applicant_data[field].strip()
-                )
+            # No customer ID or applicant data is accepted from the model.
+            # The downstream service must derive customer identity from
+            # the trusted authenticated request context.
+            result = await client.check_loan_eligibility(
+                access_token=_get_request_token(),
             )
 
-            if missing_fields:
+            if not isinstance(result, dict):
                 result = {
                     "success": False,
-                    "status": "INSUFFICIENT_INFORMATION",
-                    "missing_fields": missing_fields,
+                    "status": "INVALID_RESPONSE",
                     "message": (
-                        "More applicant information is required."
+                        "The eligibility service returned an invalid response."
                     ),
                 }
-                _tool_succeeded(
-                    "check_loan_eligibility",
-                    started_at,
-                )
-                return result
 
-            unexpected_fields = sorted(
-                set(applicant_data) - LOAN_APPLICANT_FIELDS
-            )
-
-            if unexpected_fields:
+            # Fail closed: never treat a historical-model estimate as a
+            # genuine bank eligibility decision.
+            if result.get("status") == "MODEL_ESTIMATE":
                 result = {
                     "success": False,
-                    "status": "INVALID_INPUT",
-                    "error": (
-                        "Unexpected applicant fields were supplied."
-                    ),
-                    "unexpected_fields": unexpected_fields,
-                }
-                _tool_succeeded(
-                    "check_loan_eligibility",
-                    started_at,
-                )
-                return result
-
-            try:
-                applicant = LoanApplicantInput(**applicant_data)
-                prediction = LoanModelInference().predict(applicant)
-
-            except (TypeError, ValueError):
-                result = {
-                    "success": False,
-                    "status": "INVALID_INPUT",
-                    "error": (
-                        "Applicant information contains invalid values."
-                    ),
-                }
-                _tool_succeeded(
-                    "check_loan_eligibility",
-                    started_at,
-                )
-                return result
-
-            except Exception as exc:
-                _tool_failed(
-                    "check_loan_eligibility",
-                    started_at,
-                    exc,
-                )
-                return {
-                    "success": False,
-                    "status": "MODEL_UNAVAILABLE",
-                    "error": (
-                        "The demonstration model is temporarily "
-                        "unavailable."
+                    "status": "ASSESSMENT_UNAVAILABLE",
+                    "message": (
+                        "The historical demonstration model cannot determine "
+                        "actual Rubies MFB loan eligibility."
                     ),
                 }
 
-            result = {
-                "success": True,
-                "status": "MODEL_ESTIMATE",
-                "data": prediction.to_dict(),
-                "notice": (
-                    "Historical-model demonstration only. "
-                    "This is not a Rubies MFB lending decision "
-                    "or loan approval."
-                ),
-            }
-
-            _tool_succeeded(
-                "check_loan_eligibility",
-                started_at,
-            )
+            _tool_succeeded("check_loan_eligibility", started_at)
             return result
 
         except Exception as exc:
@@ -629,6 +626,7 @@ def create_server(
                 exc,
             )
             raise
+
 
     @server.tool()
     async def handoff_to_human(
@@ -797,7 +795,7 @@ def create_server(
     _record_event(
         event="mcp_server_created",
         outcome="success",
-        registered_tool_count=9,
+        registered_tool_count=12,
     )
 
     return server

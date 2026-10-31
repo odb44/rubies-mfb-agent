@@ -173,14 +173,90 @@ class BankingAPIClient:
             raise BankingAPIError("The Banking API returned an unexpected response.")
         return result
 
-    async def get_balance(self, account_reference: str, *, access_token: str | None = None) -> dict[str, Any]:
+    async def get_customer_accounts(
+        self,
+        *,
+        access_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Retrieve active accounts belonging to the authenticated customer."""
+        payload = await self._get(
+            "/api/accounts/me",
+            resource_name="customer accounts",
+            access_token=access_token,
+        )
+
+        if payload.get("success") is not True:
+            raise BankingAPIError(
+                "The Banking API returned an unexpected customer accounts response."
+            )
+
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise BankingAPIError(
+                "The Banking API returned invalid customer accounts data."
+            )
+
+        accounts = data.get("accounts")
+        count = data.get("count")
+
+        if not isinstance(accounts, list) or not isinstance(count, int):
+            raise BankingAPIError(
+                "The Banking API returned invalid customer accounts data."
+            )
+
+        if count != len(accounts):
+            raise BankingAPIError(
+                "The Banking API returned an inconsistent customer accounts count."
+            )
+
+        for account in accounts:
+            if not isinstance(account, dict):
+                raise BankingAPIError(
+                    "The Banking API returned an invalid account entry."
+                )
+
+            if (
+                not isinstance(account.get("account_reference"), str)
+                or not account["account_reference"].strip()
+                or account.get("status") != "ACTIVE"
+                or not isinstance(account.get("currency"), str)
+            ):
+                raise BankingAPIError(
+                    "The Banking API returned incomplete account information."
+                )
+
+        return payload
+
+    async def get_balance(
+        self,
+        account_reference: str,
+        *,
+        access_token: str | None = None,
+    ) -> dict[str, Any]:
         """Get the balance of an account scoped by the Banking API to its owner."""
         reference = account_reference.strip()
         if not reference:
             raise ValueError("Account reference is required.")
+
         from urllib.parse import quote
-        payload = await self._get(f"/api/accounts/{quote(reference, safe='')}/balance", resource_name="account", access_token=access_token)
-        return payload if payload.get("success") is True else {"success": True, "data": payload}
+
+        payload = await self._get(
+            f"/api/accounts/{quote(reference, safe='')}/balance",
+            resource_name="account",
+            access_token=access_token,
+        )
+
+        if payload.get("success") is False:
+            return payload
+
+        if payload.get("success") is True:
+            return payload
+
+        # The Banking API's balance endpoint returns its data under "data".
+        # Reject unexpected response shapes rather than claiming success.
+        raise BankingAPIError(
+            "The Banking API returned an unexpected balance response."
+        )
 
     async def get_mini_statement(self, account_reference: str, *, limit: int = 10, offset: int = 0, access_token: str | None = None) -> dict[str, Any]:
         """Get a bounded mini-statement for the authenticated customer's account."""
@@ -203,6 +279,95 @@ class BankingAPIClient:
         """Block a card after the Banking API validates explicit confirmation."""
         from urllib.parse import quote
         result = await self._post_json(f"/api/cards/{quote(card_reference.strip(), safe='')}/block", {"confirmation_id": confirmation_id}, resource_name="card", access_token=access_token)
+        return {"success": True, "data": result}
+
+    async def create_confirmation(
+        self,
+        *,
+        action: str,
+        payload: dict[str, str],
+        access_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a pending confirmation bound to the authenticated session."""
+
+        normalized_action = action.strip().upper()
+
+        if normalized_action not in {"BLOCK_CARD", "OPEN_DISPUTE"}:
+            raise ValueError("Unsupported confirmation action.")
+
+        if normalized_action == "BLOCK_CARD":
+            card_reference = payload.get("card_reference", "").strip()
+            if not card_reference:
+                raise ValueError("Card reference is required.")
+
+            payload = {"card_reference": card_reference}
+
+        result = await self._post_json(
+            "/api/confirmations",
+            {
+                "action": normalized_action,
+                "payload": payload,
+            },
+            resource_name="confirmation",
+            access_token=access_token,
+        )
+
+        if (
+            not isinstance(result.get("confirmation_id"), str)
+            or result.get("status") != "PENDING"
+        ):
+            raise BankingAPIError(
+                "The Banking API returned an invalid confirmation response."
+            )
+
+        return {"success": True, "data": result}
+
+    async def approve_confirmation(
+        self,
+        *,
+        confirmation_id: str,
+        action: str,
+        payload: dict[str, str],
+        access_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Approve a pending confirmation for its exact action and payload."""
+
+        confirmation_id = confirmation_id.strip()
+        normalized_action = action.strip().upper()
+
+        if not confirmation_id:
+            raise ValueError("Confirmation ID is required.")
+
+        if normalized_action not in {"BLOCK_CARD", "OPEN_DISPUTE"}:
+            raise ValueError("Unsupported confirmation action.")
+
+        if normalized_action == "BLOCK_CARD":
+            card_reference = payload.get("card_reference", "").strip()
+            if not card_reference:
+                raise ValueError("Card reference is required.")
+
+            payload = {"card_reference": card_reference}
+
+        result = await self._post_json(
+            "/api/confirmations/approve",
+            {
+                "confirmation_id": confirmation_id,
+                "action": normalized_action,
+                "payload": payload,
+            },
+            resource_name="confirmation",
+            access_token=access_token,
+        )
+
+        if (
+            result.get("confirmation_id") != confirmation_id
+            or result.get("action") != normalized_action
+            or result.get("status") != "APPROVED"
+        ):
+            raise BankingAPIError(
+                "The Banking API did not confirm approval."
+            )
+
         return {"success": True, "data": result}
 
     async def create_support_handoff(

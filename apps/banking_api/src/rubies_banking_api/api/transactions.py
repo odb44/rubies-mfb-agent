@@ -116,6 +116,47 @@ def get_account_balance(
         },
     }
 
+@router.get("/api/accounts/me")
+def get_my_accounts(
+    db: Annotated[Session, Depends(get_db)],
+    identity: Annotated[CustomerIdentity, Depends(get_customer_identity)],
+) -> dict[str, object]:
+    """Return active accounts belonging to the verified customer."""
+    if not identity.verified:
+        raise HTTPException(
+            status_code=401,
+            detail="A verified customer identity is required.",
+        )
+
+    customer = CustomerRepository(db).get_by_reference(identity.customer_id)
+
+    if customer is None or not customer.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="The customer account is not available.",
+        )
+
+    accounts = db.scalars(
+        select(Account).where(
+            Account.customer_id == customer.id,
+            Account.status == "ACTIVE",
+        )
+    ).all()
+
+    return {
+        "success": True,
+        "data": {
+            "accounts": [
+                {
+                    "account_reference": account.account_number,
+                    "currency": account.currency,
+                    "status": account.status,
+                }
+                for account in accounts
+            ],
+            "count": len(accounts),
+        },
+    }
 
 @router.get(
     "/api/accounts/{account_reference}/mini-statement",

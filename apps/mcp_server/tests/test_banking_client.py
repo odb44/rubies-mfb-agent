@@ -90,6 +90,54 @@ def test_get_transaction_status_sends_authorization_header():
     assert result["data"]["reference"] == "TXN-001"
     assert result["data"]["status"] == "SUCCESSFUL"
 
+def test_get_balance_preserves_successful_response():
+    expected = {
+        "success": True,
+        "data": {
+            "account_reference": "ACC-001",
+            "balance": "12500.00",
+            "currency": "NGN",
+            "status": "ACTIVE",
+        },
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == "/api/accounts/ACC-001/balance"
+        assert request.headers["Authorization"] == f"Bearer {ACCESS_TOKEN}"
+        return httpx.Response(200, json=expected)
+
+    async def operation(client):
+        return await client.get_balance("ACC-001", access_token=ACCESS_TOKEN)
+
+    assert run_with_mock_http(handler, operation) == expected
+
+
+def test_get_balance_preserves_explicit_failure():
+    expected = {
+        "success": False,
+        "error": "The account is not available.",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=expected)
+
+    async def operation(client):
+        return await client.get_balance("ACC-001", access_token=ACCESS_TOKEN)
+
+    assert run_with_mock_http(handler, operation) == expected
+
+
+def test_get_balance_rejects_unexpected_response_shape():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"balance": "12500.00"})
+
+    async def operation(client):
+        return await client.get_balance("ACC-001", access_token=ACCESS_TOKEN)
+
+    with pytest.raises(BankingAPIError, match="unexpected balance response"):
+        run_with_mock_http(handler, operation)
+
 
 def test_get_loan_status_sends_authorization_header():
     def handler(request: httpx.Request) -> httpx.Response:

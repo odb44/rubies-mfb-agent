@@ -46,10 +46,17 @@ def get_customer_identity(
             credentials.credentials,
             token_settings,
         )
+    
     except (AuthenticationError, ValueError, IdentityVerificationError) as exc:
+        print(
+            f"[AUTH DEBUG] Validation failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="The access token is invalid or customer verification is required.",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+
     

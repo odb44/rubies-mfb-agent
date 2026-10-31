@@ -1,4 +1,4 @@
-from types import SimpleNamespace
+﻿from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -18,7 +18,7 @@ def customer():
     return SimpleNamespace(
         id=7,
         customer_reference="CUS-0007",
-        active=True,
+        is_active=True,
     )
 
 
@@ -128,7 +128,7 @@ def test_rejects_inactive_customer(
     identity,
     customer,
 ):
-    customer.active = False
+    customer.is_active = False
     repositories["customer"].get_by_reference.return_value = customer
 
     with pytest.raises(CustomerMismatchError):

@@ -74,7 +74,7 @@ def test_banking_tool_forwards_request_token_to_mcp(monkeypatch) -> None:
 
     result = asyncio.run(scenario())
 
-    assert captured["url"] == "http://127.0.0.1:8001/mcp"
+    assert captured["url"] == "http://127.0.0.1:8002/mcp"
     assert captured["headers"] == {
         "Authorization": "Bearer customer-a-test-token"
     }

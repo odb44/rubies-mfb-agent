@@ -2,7 +2,9 @@
 
 import json
 import os
+import logging
 from contextvars import ContextVar
+from time import perf_counter
 from typing import Any
 
 from mcp import ClientSession
@@ -12,14 +14,16 @@ from strands.models.bedrock import BedrockModel
 
 from rubies_knowledge_base.retrieval import search_policies
 
-import logging
-from time import perf_counter
+from collections.abc import AsyncGenerator
+
+from rubies_observability.model_metrics import model_metrics
 
 from rubies_observability import (
     configure_logging,
     get_correlation_id,
     log_event,
 )
+
 configure_logging()
 logger = logging.getLogger("rubies.agent")
 
@@ -104,20 +108,28 @@ async def _call_banking_tool(
 
         response: dict[str, Any] | None = None
 
-        for item in result.content:
-            content_text = getattr(item, "text", None)
+        # MCP servers can return structured content or JSON text.
+        # Prefer structured content when it is available.
+        structured_content = getattr(result, "structuredContent", None)
 
-            if not isinstance(content_text, str):
-                continue
+        if isinstance(structured_content, dict):
+            response = structured_content
 
-            try:
-                decoded = json.loads(content_text)
-            except json.JSONDecodeError:
-                continue
+        if response is None:
+            for item in result.content:
+                content_text = getattr(item, "text", None)
 
-            if isinstance(decoded, dict):
-                response = decoded
-                break
+                if not isinstance(content_text, str):
+                    continue
+
+                try:
+                    decoded = json.loads(content_text)
+                except json.JSONDecodeError:
+                    continue
+
+                if isinstance(decoded, dict):
+                    response = decoded
+                    break
 
         if response is None:
             raise RuntimeError(
@@ -145,19 +157,20 @@ async def _call_banking_tool(
     finally:
         try:
             log_event(
-                logger,
-                component="agent",
-                event="banking_tool_call",
-                outcome=outcome,
-                duration_ms=round(
-                    (perf_counter() - started) * 1000,
-                    2,
-                ),
-                tool_name=tool_name,
-            )
+    logger,
+    component="agent",
+    event="banking_tool_call",
+    outcome=outcome,
+    duration_ms=round(
+        (perf_counter() - started) * 1000,
+        2,
+    ),
+    metadata={"tool_name": tool_name},
+)
         except Exception:
             # Observability failures must never break banking operations.
             pass
+
 
 @tool
 def search_banking_policy(query: str) -> dict[str, Any]:
@@ -176,55 +189,194 @@ async def verify_customer() -> dict[str, Any]:
     try:
         return await _call_banking_tool("verify_customer", {})
     except RuntimeError as exc:
-        return {"success": False, "verified": False, "error": str(exc)}
+        return {
+            "success": False,
+            "verified": False,
+            "error": str(exc),
+        }
+
+
+@tool
+async def get_customer_accounts() -> dict[str, Any]:
+    """Retrieve active accounts belonging to the authenticated customer."""
+    try:
+        return await _call_banking_tool("get_customer_accounts", {})
+    except RuntimeError as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
 async def get_balance(account_reference: str) -> dict[str, Any]:
     """Retrieve an account balance for the authenticated customer."""
     if not account_reference.strip():
-        return {"success": False, "error": "A valid account reference is required."}
+        return {
+            "success": False,
+            "error": "A valid account reference is required.",
+        }
+
     try:
-        return await _call_banking_tool("get_balance", {"account_reference": account_reference.strip()})
+        return await _call_banking_tool(
+            "get_balance",
+            {"account_reference": account_reference.strip()},
+        )
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
-async def get_mini_statement(account_reference: str, limit: int = 10, offset: int = 0) -> dict[str, Any]:
+async def get_mini_statement(
+    account_reference: str,
+    limit: int = 10,
+    offset: int = 0,
+) -> dict[str, Any]:
     """Retrieve recent transactions for the authenticated customer's account."""
-    if not account_reference.strip() or not 1 <= limit <= 50 or offset < 0:
-        return {"success": False, "error": "Provide a valid account reference, limit 1-50, and non-negative offset."}
+    if (
+        not account_reference.strip()
+        or not 1 <= limit <= 50
+        or offset < 0
+    ):
+        return {
+            "success": False,
+            "error": (
+                "Provide a valid account reference, limit 1-50, "
+                "and non-negative offset."
+            ),
+        }
+
     try:
-        return await _call_banking_tool("get_mini_statement", {"account_reference": account_reference.strip(), "limit": limit, "offset": offset})
+        return await _call_banking_tool(
+            "get_mini_statement",
+            {
+                "account_reference": account_reference.strip(),
+                "limit": limit,
+                "offset": offset,
+            },
+        )
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
-async def open_dispute(confirmation_id: str, category: str, description: str, transaction_reference: str | None = None) -> dict[str, Any]:
-    """Submit a dispute only after the server has approved the action-bound confirmation."""
-    if not confirmation_id.strip() or not category.strip() or not description.strip():
-        return {"success": False, "error": "A valid confirmation, category, and description are required."}
-    arguments: dict[str, Any] = {"confirmation_id": confirmation_id, "category": category, "description": description}
+async def open_dispute(
+    confirmation_id: str,
+    category: str,
+    description: str,
+    transaction_reference: str | None = None,
+) -> dict[str, Any]:
+    """Submit a dispute only after server-approved action confirmation."""
+    if (
+        not confirmation_id.strip()
+        or not category.strip()
+        or not description.strip()
+    ):
+        return {
+            "success": False,
+            "error": (
+                "A valid confirmation, category, and description are required."
+            ),
+        }
+
+    arguments: dict[str, Any] = {
+        "confirmation_id": confirmation_id,
+        "category": category,
+        "description": description,
+    }
+
     if transaction_reference:
         arguments["transaction_reference"] = transaction_reference
+
     try:
         return await _call_banking_tool("open_dispute", arguments)
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
-async def block_card(card_reference: str, confirmation_id: str) -> dict[str, Any]:
-    """Block a card only after the server validates explicit action confirmation."""
+async def block_card(
+    card_reference: str,
+    confirmation_id: str,
+) -> dict[str, Any]:
+    """Block a card only after server-side action confirmation."""
     if not card_reference.strip() or not confirmation_id.strip():
-        return {"success": False, "error": "Card reference and approved confirmation are required."}
-    try:
-        return await _call_banking_tool("block_card", {"card_reference": card_reference, "confirmation_id": confirmation_id})
-    except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return {
+            "success": False,
+            "error": "Card reference and approved confirmation are required.",
+        }
 
+    try:
+        return await _call_banking_tool(
+            "block_card",
+            {
+                "card_reference": card_reference,
+                "confirmation_id": confirmation_id,
+            },
+        )
+    except RuntimeError as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
+
+@tool
+async def create_confirmation(action: str, payload: dict[str, str]) -> dict:
+    """Create a pending confirmation for a supported sensitive banking action.
+
+    For card blocking, use action BLOCK_CARD and payload containing the
+    exact card_reference. This does not authorize the action.
+    """
+    if action.strip().upper() not in {"BLOCK_CARD", "OPEN_DISPUTE"}:
+        return {"success": False, "error": "Unsupported confirmation action."}
+
+    if action.strip().upper() == "BLOCK_CARD":
+        if not payload.get("card_reference", "").strip():
+            return {"success": False, "error": "Card reference is required."}
+
+    return await _call_banking_tool(
+        "create_confirmation",
+        {
+            "action": action.strip().upper(),
+            "payload": payload,
+        },
+    )
+
+
+@tool
+async def approve_confirmation(
+    confirmation_id: str,
+    action: str,
+    payload: dict[str, str],
+) -> dict:
+    """Approve a pending confirmation only after explicit customer consent."""
+    if not confirmation_id.strip():
+        return {"success": False, "error": "Confirmation ID is required."}
+
+    if action.strip().upper() not in {"BLOCK_CARD", "OPEN_DISPUTE"}:
+        return {"success": False, "error": "Unsupported confirmation action."}
+
+    if action.strip().upper() == "BLOCK_CARD":
+        if not payload.get("card_reference", "").strip():
+            return {"success": False, "error": "Card reference is required."}
+
+    return await _call_banking_tool(
+        "approve_confirmation",
+        {
+            "confirmation_id": confirmation_id,
+            "action": action.strip().upper(),
+            "payload": payload,
+        },
+    )
 
 @tool
 async def get_transaction_status(
@@ -244,14 +396,15 @@ async def get_transaction_status(
         }
 
     try:
-        result = await _call_banking_tool(
+        return await _call_banking_tool(
             "get_transaction_status",
             {"transaction_reference": reference},
         )
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
-
-    return result
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
@@ -272,42 +425,29 @@ async def get_loan_status(
         }
 
     try:
-        result = await _call_banking_tool(
+        return await _call_banking_tool(
             "get_loan_status",
             {"loan_reference": reference},
         )
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
-    return result
 
 @tool
-async def check_loan_eligibility(
-    applicant_data: dict[str, Any],
-) -> dict[str, Any]:
-    """Run a historical loan-model demonstration using applicant information.
+async def check_loan_eligibility() -> dict[str, Any]:
+    """Check preliminary loan eligibility using the authenticated
+    customer's existing banking data.
 
-    This is not an official Rubies MFB eligibility assessment or loan decision.
-    All applicant data is passed through the authenticated MCP server.
+    Do not request applicant data from the customer or model.
+    This is a preliminary assessment, not a loan approval.
     """
-    if not isinstance(applicant_data, dict):
-        return {
-            "success": False,
-            "status": "INVALID_INPUT",
-            "error": "Applicant information must be provided as an object.",
-        }
-
-    if not applicant_data:
-        return {
-            "success": False,
-            "status": "INSUFFICIENT_INFORMATION",
-            "error": "Applicant information is required.",
-        }
-
     try:
         return await _call_banking_tool(
             "check_loan_eligibility",
-            {"applicant_data": applicant_data},
+            {},
         )
     except RuntimeError as exc:
         return {
@@ -317,12 +457,22 @@ async def check_loan_eligibility(
         }
 
 
-
 @tool
-async def handoff_to_human(reason: str, summary: str, route: str = "GENERAL_HUMAN_SUPPORT", priority: str = "P3", actions_attempted: list[str] | None = None, unresolved_questions: list[str] | None = None) -> dict[str, Any]:
-    """Create a support handoff when the customer requests a person or the issue needs human review."""
+async def handoff_to_human(
+    reason: str,
+    summary: str,
+    route: str = "GENERAL_HUMAN_SUPPORT",
+    priority: str = "P3",
+    actions_attempted: list[str] | None = None,
+    unresolved_questions: list[str] | None = None,
+) -> dict[str, Any]:
+    """Create a support handoff for human review."""
     if not reason.strip() or not summary.strip():
-        return {"success": False, "error": "A reason and concise summary are required."}
+        return {
+            "success": False,
+            "error": "A reason and concise summary are required.",
+        }
+
     arguments: dict[str, Any] = {
         "reason": reason,
         "summary": summary,
@@ -331,68 +481,169 @@ async def handoff_to_human(reason: str, summary: str, route: str = "GENERAL_HUMA
         "actions_attempted": actions_attempted or [],
         "unresolved_questions": unresolved_questions or [],
     }
+
     try:
         return await _call_banking_tool("handoff_to_human", arguments)
     except RuntimeError as exc:
-        return {"success": False, "error": str(exc)}
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 SYSTEM_PROMPT = """
-You are the Rubies MFB Customer Support Agent.
+You are the Rubies MFB Customer Support Agent. Respond in the customer's
+language, using English or Nigerian Pidgin as appropriate.
 
-Your responsibilities:
-- Help customers understand banking services and policies.
-- Explain transaction statuses using verified banking information.
-- Guide customers through appropriate support workflows.
--Explain historical loan-model estimates without promising loan approval.
-- For loan eligibility demonstration requests, use check_loan_eligibility
-  only when the applicant has supplied the required information.
-- Ask for missing information rather than inventing applicant details.
-- Explain that the model uses historical Kaggle loan data and is not validated
-  for Rubies MFB lending decisions.
-- Never describe a historical model estimate as an actual eligibility
-  decision, approval, rejection, or loan offer.
-- Escalate unresolved, unsafe, or sensitive issues to a human support agent.
+PURPOSE
+Help authenticated customers with accounts, balances, transactions,
+transaction status, disputes, cards, loans, banking policies, and human
+support. Use only capabilities exposed by your tools.
 
-Policy retrieval:
-- For questions about banking policies, procedures, or rules, use
-  search_banking_policy before answering.
-- Base policy explanations on approved retrieved policy content.
-- Identify the source filename and relevant section when explaining a policy.
-- If no relevant policy is found, explain the limitation instead of inventing
-  an official banking rule.
-- Policy retrieval does not provide customer-specific account records.
+TOOL USE
+- Retrieve customer-specific information from banking tools; never invent it.
+- Use verify_customer before sensitive actions.
+- Use get_customer_accounts to identify available accounts when needed.
+  Ask which account the customer means if multiple accounts are relevant.
+- Use get_mini_statement for transaction history and get_transaction_status
+  for transaction enquiries.
+- Use search_banking_policy for banking rules and procedures. Base policy
+  answers on retrieved sources and identify the source when available.
+- Use create_confirmation, approve_confirmation, and then the relevant
+  action tool for sensitive operations such as disputes and card blocking.
+  Require explicit customer consent, use the exact target and matching
+  payload throughout, and stop if any step fails.
+- Use get_loan_status for loan enquiries and handoff_to_human when an issue
+  requires human assistance.
+- Use check_loan_eligibility only for the historical loan-model demonstration.
+  Never present its estimate as an actual Rubies MFB lending decision.
 
-Banking tools:
-- Use verify_customer to confirm the current authenticated session before sensitive support actions.
-- Use get_balance and get_mini_statement only with an account reference supplied by the customer; the Banking API enforces ownership.
-- Use open_dispute and block_card only when a server-approved confirmation ID exists for the exact action and target. Never invent or bypass confirmation IDs.
-- Use get_transaction_status for transaction-status enquiries.
-- Use get_loan_status for loan-status enquiries.
-- Report banking results only when a trusted banking service returns them.
-- If a tool reports failure, explain that the status could not be retrieved.
-- Never treat a reference supplied by the customer as proof of identity.
-- Never invent balances, transaction statuses, or customer records.
-- Use check_loan_eligibility only for the historical-model demonstration.
-- Treat unsuccessful tool responses as failures, not eligibility results.
+TRUTH AND SAFETY
+- Trust authenticated identity and backend ownership checks, not customer-
+  supplied references as proof of identity.
+- Never request passwords, PINs, or authentication secrets.
+- Never invent records, confirmation IDs, policies, or tool results.
+- Treat unsuccessful tool responses as failures. Explain what could not be
+  completed and offer a useful next step.
+- Claim an operation succeeded only when the banking service confirms it.
+- Never bypass authorization, consent, confirmation, or ownership controls.
+- Do not infer missing loan-model inputs or expose another customer's data.
 
-Security rules:
-- Never ask customers to disclose passwords, PINs, or authentication secrets.
-- Never reveal access tokens or internal authentication details.
-- Never claim an operation succeeded unless a trusted service confirms it.
-- Never execute a sensitive state-changing operation without the required
-  server-enforced authorization and explicit confirmation.
-- If reliable information is unavailable, explain the limitation and offer
-  an appropriate next step.
-
-Only use the tools and policy sources explicitly provided to you.
-Do not claim to have accessed a system or completed an operation when you have not.
+Keep responses clear, concise, empathetic, and action-oriented. Ask only for
+information genuinely needed to proceed. Use only the supplied tools and
+approved policy sources.
 """.strip()
+
+def _find_metadata(value: Any) -> dict[str, Any] | None:
+    """Find provider usage and latency metadata in a streamed event."""
+    if isinstance(value, dict):
+        metadata = value.get("metadata")
+
+        if isinstance(metadata, dict):
+            if "usage" in metadata or "metrics" in metadata:
+                return metadata
+
+        for nested_value in value.values():
+            found = _find_metadata(nested_value)
+            if found is not None:
+                return found
+
+    elif isinstance(value, (list, tuple)):
+        for nested_value in value:
+            found = _find_metadata(nested_value)
+            if found is not None:
+                return found
+
+    return None
+
+
+def _is_content_event(value: Any) -> bool:
+    """Identify the first event that carries generated content."""
+    if not isinstance(value, dict):
+        return False
+
+    content_keys = {
+        "contentBlockDelta",
+        "content_block_delta",
+        "text",
+    }
+
+    if any(key in value for key in content_keys):
+        return True
+
+    for nested_value in value.values():
+        if isinstance(nested_value, dict) and _is_content_event(nested_value):
+            return True
+
+    return False
+
+
+
+
+class ObservedBedrockModel(BedrockModel):
+    """Bedrock model that records usage and timing without changing its stream."""
+
+    async def stream(
+        self,
+        messages: Any,
+        tool_specs: Any = None,
+        system_prompt: Any = None,
+        **kwargs: Any,
+    ) -> AsyncGenerator[Any, None]:
+        started_at = perf_counter()
+        first_content_at: float | None = None
+        provider_metadata: dict[str, Any] = {}
+        success = False
+
+        try:
+            async for event in super().stream(
+                messages=messages,
+                tool_specs=tool_specs,
+                system_prompt=system_prompt,
+                **kwargs,
+            ):
+                now = perf_counter()
+
+                if first_content_at is None and _is_content_event(event):
+                    first_content_at = now
+
+                metadata = _find_metadata(event)
+                if metadata is not None:
+                    provider_metadata.update(metadata)
+
+                # Preserve the original Strands streaming behaviour.
+                yield event
+
+            success = True
+
+        finally:
+            finished_at = perf_counter()
+
+            usage = provider_metadata.get("usage") or {}
+            provider_metrics = provider_metadata.get("metrics") or {}
+
+            provider_latency = provider_metrics.get("latencyMs")
+            measured_latency = (finished_at - started_at) * 1000
+
+            ttfb = provider_metrics.get("timeToFirstByteMs")
+
+            if ttfb is None and first_content_at is not None:
+                ttfb = (first_content_at - started_at) * 1000
+
+            model_metrics.record_call(
+                usage=usage,
+                latency_ms=(
+                    float(provider_latency)
+                    if provider_latency is not None
+                    else measured_latency
+                ),
+                ttfb_ms=float(ttfb) if ttfb is not None else None,
+                success=success,
+            )
 
 
 def build_agent() -> Agent:
     """Construct the Strands agent using Amazon Bedrock."""
-
     model_id = os.getenv("BEDROCK_MODEL_ID", "").strip()
     region = os.getenv("AWS_REGION", "").strip()
 
@@ -409,7 +660,7 @@ def build_agent() -> Agent:
     if region:
         model_options["region_name"] = region
 
-    model = BedrockModel(**model_options)
+    model = ObservedBedrockModel(**model_options)
 
     return Agent(
         model=model,
@@ -417,6 +668,7 @@ def build_agent() -> Agent:
         tools=[
             search_banking_policy,
             verify_customer,
+            get_customer_accounts,
             get_balance,
             get_mini_statement,
             get_transaction_status,
@@ -425,5 +677,7 @@ def build_agent() -> Agent:
             check_loan_eligibility,
             get_loan_status,
             handoff_to_human,
+            create_confirmation,
+            approve_confirmation,
         ],
     )
