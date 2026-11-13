@@ -2,7 +2,7 @@
 
 **Artifact ID:** RB-DES-EVAL-REPORT-001  
 **Version:** 0.1  
-**Status:** Prepared design draft — review required  
+**Status:Final
 **Target location:** `docs/evaluation/evaluation-scoring-reporting.md`  
 **Scope:** Scoring rules, critical-failure handling, result aggregation, and report contents for the initial agent evaluation.  
 **Boundary:** This document defines the intended evaluation process. It does not claim that evaluators, application code, test execution, or baseline results exist.

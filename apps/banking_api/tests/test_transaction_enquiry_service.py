@@ -2,15 +2,14 @@
 from unittest.mock import Mock
 
 import pytest
-
+from rubies_banking_api.services.transaction_enquiry_service import (
+    TransactionEnquiryService,
+)
 from rubies_security.identity import (
     CustomerMismatchError,
     IdentityVerificationError,
 )
 from rubies_shared.identity import CustomerIdentity
-from rubies_banking_api.services.transaction_enquiry_service import (
-    TransactionEnquiryService,
-)
 
 
 @pytest.fixture

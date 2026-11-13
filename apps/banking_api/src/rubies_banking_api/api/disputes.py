@@ -110,9 +110,7 @@ def create_dispute(
                 )
 
             transaction = db.scalar(
-                select(Transaction).where(
-                    Transaction.reference == transaction_reference
-                )
+                select(Transaction).where(Transaction.reference == transaction_reference)
             )
 
             if transaction is None:

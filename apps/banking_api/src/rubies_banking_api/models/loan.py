@@ -29,8 +29,7 @@ class Loan(Base):
             name="principal_positive",
         ),
         CheckConstraint(
-            "outstanding_balance >= 0 "
-            "AND outstanding_balance <= principal",
+            "outstanding_balance >= 0 AND outstanding_balance <= principal",
             name="valid_outstanding_balance",
         ),
         CheckConstraint(

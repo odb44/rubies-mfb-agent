@@ -1,3 +1,4 @@
+
 """Business rules for read-only loan enquiries."""
 
 from rubies_security.identity import (
@@ -49,6 +50,66 @@ class LoanEnquiryService:
 
         return customer
 
+    def get_customer_loan_overview(
+        self,
+        identity: CustomerIdentity,
+    ) -> tuple[list[Loan], list[LoanApplication]]:
+        """
+        Retrieve all loans and applications belonging to the
+        authenticated customer.
+        """
+        customer = self._resolve_customer(identity)
+
+        loans = self.loan_repository.list_all_by_customer(customer.id)
+
+        applications = (
+            self.loan_application_repository.list_by_customer(customer.id)
+        )
+
+        # Verify ownership of every loan and its linked application.
+        for loan in loans:
+            if loan.customer_id != customer.id:
+                raise CustomerMismatchError(
+                    "The requested loan is not available to this customer."
+                )
+
+            if loan.application.customer_id != customer.id:
+                raise CustomerMismatchError(
+                    "The requested loan is not available to this customer."
+                )
+
+        # Verify ownership of every application.
+        for application in applications:
+            if application.customer_id != customer.id:
+                raise CustomerMismatchError(
+                    "The requested loan application is not available "
+                    "to this customer."
+                )
+
+        return loans, applications
+
+    def get_active_loans(
+        self,
+        identity: CustomerIdentity,
+    ) -> list[Loan]:
+        """Retrieve active and overdue loans for the authenticated customer."""
+        customer = self._resolve_customer(identity)
+
+        loans = self.loan_repository.list_active_by_customer(customer.id)
+
+        for loan in loans:
+            if loan.customer_id != customer.id:
+                raise CustomerMismatchError(
+                    "The requested loan is not available to this customer."
+                )
+
+            if loan.application.customer_id != customer.id:
+                raise CustomerMismatchError(
+                    "The requested loan is not available to this customer."
+                )
+
+        return loans
+
     def get_loan_status(
         self,
         identity: CustomerIdentity,
@@ -68,8 +129,6 @@ class LoanEnquiryService:
                 "The requested loan is not available to this customer."
             )
 
-        # Defence in depth: the linked application must belong to the
-        # same customer as the loan.
         if loan.application.customer_id != customer.id:
             raise CustomerMismatchError(
                 "The requested loan is not available to this customer."
@@ -83,7 +142,7 @@ class LoanEnquiryService:
         *,
         application_reference: str,
     ) -> LoanApplication:
-        """Retrieve a loan application after validating ownership."""
+        """Retrieve an application after validating customer ownership."""
         customer = self._resolve_customer(identity)
 
         application = (

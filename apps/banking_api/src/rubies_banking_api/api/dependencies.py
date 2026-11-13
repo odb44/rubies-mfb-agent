@@ -4,8 +4,6 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-from rubies_banking_api.config import get_settings
 from rubies_security.authentication import (
     AuthenticationError,
     TokenSettings,
@@ -13,6 +11,8 @@ from rubies_security.authentication import (
 )
 from rubies_security.identity import IdentityVerificationError
 from rubies_shared.identity import CustomerIdentity
+
+from rubies_banking_api.config import get_settings
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -46,11 +46,10 @@ def get_customer_identity(
             credentials.credentials,
             token_settings,
         )
-    
+
     except (AuthenticationError, ValueError, IdentityVerificationError) as exc:
         print(
-            f"[AUTH DEBUG] Validation failed: "
-            f"{type(exc).__name__}: {exc}",
+            f"[AUTH DEBUG] Validation failed: {type(exc).__name__}: {exc}",
             flush=True,
         )
         raise HTTPException(
@@ -58,5 +57,3 @@ def get_customer_identity(
             detail="The access token is invalid or customer verification is required.",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
-
-    

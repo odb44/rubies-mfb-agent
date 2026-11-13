@@ -21,11 +21,7 @@ _SCHEMA_CANDIDATES = [
     Path("/mnt/data/report-schema.json"),
 ]
 SCHEMA_PATH = next(
-    (
-        candidate
-        for candidate in _SCHEMA_CANDIDATES
-        if candidate.is_file()
-    ),
+    (candidate for candidate in _SCHEMA_CANDIDATES if candidate.is_file()),
     _SCHEMA_CANDIDATES[0],
 )
 
@@ -146,9 +142,7 @@ class EvaluatorRunnerTests(unittest.TestCase):
             report["suites"][0]["cases"][0]["outcome"],
             "FAILED",
         )
-        self.assertTrue(
-            report["suites"][0]["cases"][0]["critical_failure"]
-        )
+        self.assertTrue(report["suites"][0]["cases"][0]["critical_failure"])
         self.assertEqual(report["summary"]["critical_failure_count"], 1)
 
     def test_critical_failure_list_forces_failed_outcome(self):
@@ -241,9 +235,7 @@ class EvaluatorRunnerTests(unittest.TestCase):
 
         self.assertTrue(path.is_file())
 
-        saved_report = json.loads(
-            path.read_text(encoding="utf-8")
-        )
+        saved_report = json.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(saved_report["run"]["run_id"], "test-run")
         self.assertFalse(path.with_suffix(".json.tmp").exists())

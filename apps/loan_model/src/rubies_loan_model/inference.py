@@ -20,9 +20,7 @@ def find_repository_root() -> Path:
         if (parent / "artifacts" / "loan_model").is_dir():
             return parent
 
-    raise FileNotFoundError(
-        "Could not locate the repository's artifacts/loan_model directory."
-    )
+    raise FileNotFoundError("Could not locate the repository's artifacts/loan_model directory.")
 
 
 class LoanModelInference:
@@ -54,9 +52,7 @@ class LoanModelInference:
         if not manifest_path.is_file():
             raise FileNotFoundError(f"Model manifest not found: {manifest_path}")
 
-        self.manifest: dict[str, Any] = json.loads(
-            manifest_path.read_text(encoding="utf-8")
-        )
+        self.manifest: dict[str, Any] = json.loads(manifest_path.read_text(encoding="utf-8"))
 
         if self.manifest.get("model_version") != self.model_version:
             raise ValueError("Manifest model_version does not match the requested version.")
@@ -85,9 +81,7 @@ class LoanModelInference:
 
         missing_features = set(self.input_features) - set(features)
         if missing_features:
-            raise ValueError(
-                f"Required model features are missing: {sorted(missing_features)}"
-            )
+            raise ValueError(f"Required model features are missing: {sorted(missing_features)}")
 
         frame = pd.DataFrame(
             [{name: features[name] for name in self.input_features}],
@@ -106,10 +100,7 @@ class LoanModelInference:
         target_mapping = self.manifest.get("target_mapping", {"N": 0, "Y": 1})
 
         # The manifest maps historical labels to encoded classifier labels.
-        encoded_to_label = {
-            str(encoded): label
-            for label, encoded in target_mapping.items()
-        }
+        encoded_to_label = {str(encoded): label for label, encoded in target_mapping.items()}
 
         predicted_label = encoded_to_label.get(str(predicted_class))
 
@@ -124,12 +115,11 @@ class LoanModelInference:
 
         if probability_no is None or probability_yes is None:
             raise ValueError(
-                f"Model classes {classes!r} do not match manifest mapping "
-                f"{target_mapping!r}."
+                f"Model classes {classes!r} do not match manifest mapping {target_mapping!r}."
             )
         return LoanModelPrediction(
-    model_version=self.model_version,
-    predicted_historical_status=predicted_label,
-    probability_historical_no=probability_no,
-    probability_historical_yes=probability_yes,
-)
+            model_version=self.model_version,
+            predicted_historical_status=predicted_label,
+            probability_historical_no=probability_no,
+            probability_historical_yes=probability_yes,
+        )

@@ -1,6 +1,6 @@
 # Rubies MFB Agent Integration Contract
 
-**Status:** integration design draft  
+**Status:Final
 **Purpose:** define the boundary between the real customer-support agent and the evaluation framework. This document is not evidence that the agent has been integrated or evaluated.
 
 ## 1. Scope and safety boundary

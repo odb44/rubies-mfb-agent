@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from rubies_security.identity import require_verified_identity
 from sqlalchemy.orm import Session
 
 from rubies_banking_api.models.support_handoff import (
@@ -14,7 +15,6 @@ from rubies_banking_api.repositories.customer_repository import (
 from rubies_banking_api.repositories.support_handoff_repository import (
     SupportHandoffRepository,
 )
-from rubies_security.identity import require_verified_identity
 
 
 class SupportHandoffService:
@@ -115,9 +115,7 @@ class SupportHandoffService:
         handoff = self._get_handoff_for_transition(reference)
 
         if handoff.status != HandoffStatus.PENDING_ACKNOWLEDGEMENT.value:
-            raise ValueError(
-                "Only pending handoffs can be acknowledged."
-            )
+            raise ValueError("Only pending handoffs can be acknowledged.")
 
         handoff.status = HandoffStatus.ACKNOWLEDGED.value
         handoff.acknowledgement_reference = acknowledgement_reference
@@ -143,9 +141,7 @@ class SupportHandoffService:
         handoff = self._get_handoff_for_transition(reference)
 
         if handoff.status != HandoffStatus.PENDING_ACKNOWLEDGEMENT.value:
-            raise ValueError(
-                "Only pending handoffs can be marked as failed."
-            )
+            raise ValueError("Only pending handoffs can be marked as failed.")
 
         handoff.status = HandoffStatus.FAILED.value
         handoff.failure_reason = failure_reason

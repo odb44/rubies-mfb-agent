@@ -16,7 +16,6 @@ from typing import TextIO
 ROOT = Path(__file__).resolve().parent
 
 BANKING_URL = "http://127.0.0.1:8000"
-MCP_URL = "http://127.0.0.1:8002/mcp"
 AGENT_URL = "http://127.0.0.1:8001"
 FRONTEND_URL = "http://127.0.0.1:5173"
 
@@ -139,9 +138,8 @@ def endpoint_ready(url: str, expected_json_status: str | None = None) -> bool:
             return payload.get("status") == expected_json_status
 
     except urllib.error.HTTPError as exc:
-        # The MCP endpoint may reject a plain GET because it expects MCP
-        # protocol traffic. A non-server-error response still proves that
-        # an HTTP server is listening at that endpoint.
+        # A non-server-error response proves that an HTTP server is listening
+        # even when an endpoint requires authentication or a specific method.
         return (
             expected_json_status is None
             and 400 <= exc.code < 500
@@ -218,7 +216,7 @@ def stop_services() -> None:
 
 
 def ensure_required_environment(env: dict[str, str]) -> None:
-    """Check required MCP authentication configuration without printing it."""
+    """Check required authentication configuration without printing it."""
     required = ("JWT_SECRET_KEY", "JWT_ISSUER", "JWT_AUDIENCE")
     missing = [key for key in required if not env.get(key, "").strip()]
 
@@ -238,7 +236,6 @@ def main() -> int:
         # Do not silently attach to another process already using our ports.
         expected_ports = (
             ("Banking API", 8000),
-            ("MCP server", 8002),
             ("Agent API", 8001),
             ("Frontend", 5173),
         )
@@ -281,14 +278,6 @@ def main() -> int:
             expected_json_status="ok",
         )
 
-        mcp = start_service(
-            "mcp",
-            [python, "-m", "rubies_mcp_server.server"],
-            ROOT,
-            env,
-        )
-        wait_until_ready("mcp", MCP_URL, mcp)
-
         agent = start_service(
             "agent",
             [python, "-m", "rubies_agent"],
@@ -321,7 +310,6 @@ def main() -> int:
         log("launcher", "All four services are ready.")
         log("launcher", f"Frontend:   {FRONTEND_URL}")
         log("launcher", f"Banking:    {BANKING_URL}")
-        log("launcher", f"MCP:        {MCP_URL}")
         log("launcher", f"Agent API:  {AGENT_URL}")
         log("launcher", "Press Ctrl+C to stop the services.")
 

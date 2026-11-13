@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 if TYPE_CHECKING:
     from rubies_banking_api.models.transaction import Transaction
 
+
 class Account(Base):
     __tablename__ = "accounts"
 
@@ -32,37 +33,35 @@ class Account(Base):
     )
 
     currency: Mapped[str] = mapped_column(
-    String(3),
-    nullable=False,
-    default="NGN",
-    server_default=text("'NGN'"),
+        String(3),
+        nullable=False,
+        default="NGN",
+        server_default=text("'NGN'"),
     )
 
     balance: Mapped[Decimal] = mapped_column(
-    Numeric(18, 2),
-    nullable=False,
-    default=Decimal("0.00"),
-    server_default=text("0.00"),
+        Numeric(18, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+        server_default=text("0.00"),
     )
 
-
     status: Mapped[str] = mapped_column(
-    String(20),
-    nullable=False,
-    default="ACTIVE",
-    server_default=text("'ACTIVE'"),
+        String(20),
+        nullable=False,
+        default="ACTIVE",
+        server_default=text("'ACTIVE'"),
     )
 
     customer: Mapped[Customer] = relationship(
         back_populates="accounts",
     )
     transactions: Mapped[list[Transaction]] = relationship(
-    back_populates="account",
-)
+        back_populates="account",
+    )
     __table_args__ = (
-    CheckConstraint(
-        "status IN ('ACTIVE', 'BLOCKED', 'CLOSED')",
-        name="valid_account_status",
-    ),
-)
-    
+        CheckConstraint(
+            "status IN ('ACTIVE', 'BLOCKED', 'CLOSED')",
+            name="valid_account_status",
+        ),
+    )

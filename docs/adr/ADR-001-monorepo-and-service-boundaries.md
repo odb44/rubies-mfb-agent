@@ -12,7 +12,7 @@ Rubies MFB Customer Support Agent combines several related capabilities:
 - Banking APIs and persistence for customer, account, transaction, card, dispute, loan, confirmation, and audit records.
 - A knowledge-base pipeline and retrieval components for policy-grounded answers.
 - A loan-model training and inference capability.
-- An MCP server boundary for exposing approved tools with authorization checks.
+- An agent tool runtime boundary for exposing approved tools with authorization checks.
 - Shared security, schemas, configuration, and observability utilities.
 - Evaluation datasets, automated tests, documentation, and synthetic data.
 
@@ -27,7 +27,7 @@ The repository will follow the approved directory schema. In particular:
 - `apps/agent/` owns conversation handling, orchestration, tool routing, confirmation coordination, and handoff coordination.
 - `apps/banking_api/` owns banking-domain APIs and the authoritative banking persistence boundary.
 - `apps/loan_model/` owns loan-model training, inference, explainability, and model evaluation.
-- `apps/mcp_server/` exposes the approved MCP tool surface and applies its authorization boundary.
+- `apps/agent/` executes the approved tool surface directly; the Banking API remains authoritative for authorization.
 - `packages/` contains reusable shared, security, knowledge-base, and observability capabilities.
 - `data/` contains synthetic project data, knowledge-source material, and model datasets.
 - `artifacts/` contains versioned model artifacts and manifests.
@@ -42,7 +42,7 @@ The existing locked directory names and ordering remain the baseline. Changes to
 1. **Coordinated development:** API contracts, tool schemas, tests, documentation, and application code can be reviewed together.
 2. **Clear ownership:** Each application and package has an identifiable responsibility and intended boundary.
 3. **Shared conventions:** Common schemas, exceptions, configuration patterns, and instrumentation can be reused without copying code between repositories.
-4. **End-to-end verification:** Integration and regression tests can exercise the agent, banking API, retrieval, model, and MCP boundaries within one versioned project.
+4. **End-to-end verification:** Integration and regression tests can exercise the agent, Banking API, retrieval, and model boundaries within one versioned project.
 5. **Capstone reproducibility:** A reviewer can inspect the architecture, synthetic fixtures, evaluation assets, and implementation history in one repository.
 6. **Room to evolve:** Logical boundaries allow a component to be extracted into a separate repository or deployed independently later if a demonstrated need justifies the cost.
 
@@ -54,7 +54,7 @@ The existing locked directory names and ordering remain the baseline. Changes to
 
 ### One tightly coupled application with no explicit boundaries
 
-**Rejected.** This would blur responsibility for banking records, agent orchestration, model inference, retrieval, and MCP authorization. It would also make it harder to test the boundaries independently and to explain which component is trusted to enforce a control.
+**Rejected.** This would blur responsibility for banking records, agent orchestration, model inference, retrieval, and agent tool input validation. It would also make it harder to test the boundaries independently and to explain which component is trusted to enforce a control.
 
 ### Monorepo with a separate process for every directory
 
@@ -80,7 +80,7 @@ The existing locked directory names and ordering remain the baseline. Changes to
 
 1. **Banking source of truth:** Banking records are owned by the banking API and its PostgreSQL persistence boundary. The agent and model must not bypass that boundary to mutate banking data.
 2. **Identity and authorization:** Trusted identity and permissions are enforced by backend security controls. The model may propose an action but is not the authority that grants access.
-3. **Tool boundary:** The agent invokes approved tool contracts. The MCP server, where used, applies its own defined authorization checks; it does not replace banking-domain authorization.
+3. **Tool boundary:** The agent invokes approved tool contracts directly. Agent-side validation does not replace Banking API authorization.
 4. **Shared packages:** Shared packages provide reusable capabilities and must not become a second home for application-specific workflows.
 5. **Knowledge and model artifacts:** Knowledge indexes and model artifacts are versioned assets, not authoritative banking records.
 6. **Deployment flexibility:** Deployment placement, container topology, and cloud hosting are intentionally not decided by this ADR.

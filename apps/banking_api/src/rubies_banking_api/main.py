@@ -5,9 +5,8 @@ import re
 import time
 import uuid
 
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Request
-
+from fastapi.middleware.cors import CORSMiddleware
 from rubies_observability import (
     configure_logging,
     correlation_context,
@@ -15,18 +14,26 @@ from rubies_observability import (
     record_metric,
 )
 
-from rubies_banking_api.api.cards import router as cards_router
-from rubies_banking_api.api.disputes import router as disputes_router
-from rubies_banking_api.api.transactions import router as transactions_router
-from rubies_banking_api.api.support_handoffs import (
-    router as support_handoffs_router,
-)
-from rubies_banking_api.api.loans import router as loans_router
 from rubies_banking_api.api.authentication import router as authentication_router
-from rubies_banking_api.config import get_settings
+from rubies_banking_api.api.cards import router as cards_router
+from rubies_banking_api.api.chats import router as chats_router
 from rubies_banking_api.api.confirmations import (
     router as confirmations_router,
 )
+from rubies_banking_api.api.disputes import router as disputes_router
+from rubies_banking_api.api.loan_eligibility import (
+    router as loan_eligibility_router,
+)
+from rubies_banking_api.api.loans import router as loans_router
+from rubies_banking_api.api.support_desk import router as support_desk_router
+from rubies_banking_api.api.support_handoffs import (
+    router as support_handoffs_router,
+)
+from rubies_banking_api.api.support_staff_authentication import (
+    router as support_staff_authentication_router,
+)
+from rubies_banking_api.api.transactions import router as transactions_router
+from rubies_banking_api.config import get_settings
 
 settings = get_settings()
 
@@ -44,6 +51,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://fulfilling-emotion-production.up.railway.app",
     ],
     allow_credentials=False,
     allow_methods=["*"],
@@ -52,11 +60,15 @@ app.add_middleware(
 
 app.include_router(confirmations_router)
 app.include_router(cards_router)
+app.include_router(chats_router)
 app.include_router(disputes_router)
 app.include_router(transactions_router)
 app.include_router(loans_router)
 app.include_router(support_handoffs_router)
 app.include_router(authentication_router)
+app.include_router(support_staff_authentication_router)
+app.include_router(support_desk_router)
+app.include_router(loan_eligibility_router)
 
 
 CORRELATION_ID_HEADER = "X-Correlation-ID"

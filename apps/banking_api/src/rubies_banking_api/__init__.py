@@ -8,9 +8,6 @@ from rubies_banking_api.models.loan import Loan
 from rubies_banking_api.models.loan_application import LoanApplication
 from rubies_banking_api.models.repayment import Repayment
 from rubies_banking_api.models.transaction import Transaction
-from rubies_banking_api.models.loan import Loan
-from rubies_banking_api.models.loan_application import LoanApplication
-from rubies_banking_api.models.repayment import Repayment
 
 __all__ = [
     "Account",

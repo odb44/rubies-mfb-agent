@@ -3,6 +3,7 @@
 Default mode deliberately runs with no agent adapters and records BLOCKED cases.
 It never fabricates agent observations or reports a pass without an adapter.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,7 +21,6 @@ from evaluator_runner import (
     run_evaluation,
     sha256_file,
 )
-
 
 SUITE_MAPPING = {
     "rag_questions": ("rag", "rag-policy-questions-v0.2.jsonl", "0.2"),
@@ -121,13 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--report",
         type=Path,
-        default=Path(
-            "docs/evaluation/reports/latest-evaluation-report.json"
-        ),
-        help=(
-            "Output report path. Relative paths are resolved from "
-            "--root."
-        ),
+        default=Path("docs/evaluation/reports/latest-evaluation-report.json"),
+        help=("Output report path. Relative paths are resolved from --root."),
     )
 
     parser.add_argument(
@@ -154,11 +149,7 @@ def main(argv: list[str] | None = None) -> int:
 
     root = args.root.resolve()
 
-    report_path = (
-        args.report
-        if args.report.is_absolute()
-        else root / args.report
-    )
+    report_path = args.report if args.report.is_absolute() else root / args.report
 
     try:
         report = run_harness(
@@ -172,8 +163,7 @@ def main(argv: list[str] | None = None) -> int:
 
     except Exception as exc:
         print(
-            "Evaluation harness stopped safely: "
-            f"{type(exc).__name__}: {exc}",
+            f"Evaluation harness stopped safely: {type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
         return 2
@@ -202,11 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
-    return (
-        0
-        if report["decision"]["status"] == "ACCEPT"
-        else 1
-    )
+    return 0 if report["decision"]["status"] == "ACCEPT" else 1
 
 
 if __name__ == "__main__":

@@ -11,9 +11,7 @@ DATASET_PATH = Path("data/synthetic/demo_dataset.json")
 def validate_dataset() -> None:
     """Check identifiers, relationships, scenarios and loan reconciliation."""
     if not DATASET_PATH.exists():
-        raise FileNotFoundError(
-            f"Dataset not found: {DATASET_PATH}. Run the generator first."
-        )
+        raise FileNotFoundError(f"Dataset not found: {DATASET_PATH}. Run the generator first.")
 
     data = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
     errors: list[str] = []
@@ -29,28 +27,17 @@ def validate_dataset() -> None:
     customer_ids = {record["customer_id"] for record in customers}
     account_ids = {record["account_id"] for record in accounts}
     loan_ids = {record["loan_id"] for record in loans}
-    application_by_id = {
-        application["application_id"]: application
-        for application in applications
-    }
-    account_by_id = {
-        account["account_id"]: account for account in accounts
-    }
+    application_by_id = {application["application_id"]: application for application in applications}
+    account_by_id = {account["account_id"]: account for account in accounts}
     loan_by_id = {loan["loan_id"]: loan for loan in loans}
 
     reference_date = date.fromisoformat(data["metadata"]["reference_date"])
 
     def check_unique(records: list[dict], field: str) -> None:
         values = [record[field] for record in records]
-        duplicates = [
-            value
-            for value, count in Counter(values).items()
-            if count > 1
-        ]
+        duplicates = [value for value, count in Counter(values).items() if count > 1]
         if duplicates:
-            errors.append(
-                f"{field}: duplicate values found: {duplicates[:5]}"
-            )
+            errors.append(f"{field}: duplicate values found: {duplicates[:5]}")
 
     for records, field in [
         (customers, "customer_id"),
@@ -76,97 +63,66 @@ def validate_dataset() -> None:
 
     for account in accounts:
         if account["customer_id"] not in customer_ids:
-            errors.append(
-                f"Account {account['account_id']} references an unknown customer."
-            )
+            errors.append(f"Account {account['account_id']} references an unknown customer.")
 
         if account["balance"] < 0:
-            errors.append(
-                f"Account {account['account_id']} has a negative balance."
-            )
+            errors.append(f"Account {account['account_id']} has a negative balance.")
 
         if account["currency"] != "NGN":
-            errors.append(
-                f"Account {account['account_id']} has unexpected currency."
-            )
+            errors.append(f"Account {account['account_id']} has unexpected currency.")
 
     for card in cards:
         if card["customer_id"] not in customer_ids:
-            errors.append(
-                f"Card {card['card_id']} references an unknown customer."
-            )
+            errors.append(f"Card {card['card_id']} references an unknown customer.")
 
         if card["account_id"] not in account_ids:
-            errors.append(
-                f"Card {card['card_id']} references an unknown account."
-            )
+            errors.append(f"Card {card['card_id']} references an unknown account.")
 
         account = account_by_id.get(card["account_id"])
         if account and account["customer_id"] != card["customer_id"]:
-            errors.append(
-                f"Card {card['card_id']} and its account have different owners."
-            )
+            errors.append(f"Card {card['card_id']} and its account have different owners.")
 
     transactions_by_scenario: dict[str, list[dict]] = defaultdict(list)
 
     for transaction in transactions:
         if transaction["customer_id"] not in customer_ids:
-            errors.append(
-                f"Transaction {transaction['reference']} has an unknown customer."
-            )
+            errors.append(f"Transaction {transaction['reference']} has an unknown customer.")
 
         if transaction["account_id"] not in account_ids:
-            errors.append(
-                f"Transaction {transaction['reference']} has an unknown account."
-            )
+            errors.append(f"Transaction {transaction['reference']} has an unknown account.")
 
         account = account_by_id.get(transaction["account_id"])
         if account and account["customer_id"] != transaction["customer_id"]:
             errors.append(
-                f"Transaction {transaction['reference']} and account have "
-                "different owners."
+                f"Transaction {transaction['reference']} and account have different owners."
             )
 
         if transaction["amount"] <= 0:
-            errors.append(
-                f"Transaction {transaction['reference']} has an invalid amount."
-            )
+            errors.append(f"Transaction {transaction['reference']} has an invalid amount.")
 
         if transaction["status"] not in {"SUCCESS", "FAILED", "PENDING"}:
-            errors.append(
-                f"Transaction {transaction['reference']} has an unknown status."
-            )
+            errors.append(f"Transaction {transaction['reference']} has an unknown status.")
 
         scenario_id = transaction.get("scenario_id")
         if scenario_id:
             transactions_by_scenario[scenario_id].append(transaction)
 
-    duplicate_pair = transactions_by_scenario.get(
-        "DUPLICATE-DEBIT-CUST-0003", []
-    )
+    duplicate_pair = transactions_by_scenario.get("DUPLICATE-DEBIT-CUST-0003", [])
 
     if len(duplicate_pair) != 2:
-        errors.append(
-            "Duplicate-debit scenario must contain exactly two linked transactions."
-        )
+        errors.append("Duplicate-debit scenario must contain exactly two linked transactions.")
     else:
         first, second = duplicate_pair
 
         for field in ("customer_id", "account_id", "amount", "transaction_type"):
             if first[field] != second[field]:
-                errors.append(
-                    f"Duplicate-debit transactions disagree on {field}."
-                )
+                errors.append(f"Duplicate-debit transactions disagree on {field}.")
 
         if first["customer_id"] != "CUST-0003":
-            errors.append(
-                "Duplicate-debit transactions must belong to CUST-0003."
-            )
+            errors.append("Duplicate-debit transactions must belong to CUST-0003.")
 
         if any(tx["status"] != "SUCCESS" for tx in duplicate_pair):
-            errors.append(
-                "Both duplicate-debit test transactions must be successful."
-            )
+            errors.append("Both duplicate-debit test transactions must be successful.")
 
         if first["reference"] == second["reference"]:
             errors.append("Duplicate-debit transactions must have distinct references.")
@@ -174,22 +130,16 @@ def validate_dataset() -> None:
     for application in applications:
         if application["customer_id"] not in customer_ids:
             errors.append(
-                f"Application {application['application_id']} "
-                "references an unknown customer."
+                f"Application {application['application_id']} references an unknown customer."
             )
 
         if application["status"] not in {"PENDING", "REJECTED", "APPROVED"}:
-            errors.append(
-                f"Application {application['application_id']} "
-                "has an invalid status."
-            )
+            errors.append(f"Application {application['application_id']} has an invalid status.")
 
     loans_by_status = Counter(loan["status"] for loan in loans)
 
     if loans_by_status["REPAID"] != 3:
-        errors.append(
-            f"Expected exactly 3 repaid loans; found {loans_by_status['REPAID']}."
-        )
+        errors.append(f"Expected exactly 3 repaid loans; found {loans_by_status['REPAID']}.")
 
     if loans_by_status["OVERDUE"] < 1:
         errors.append("Expected at least one overdue loan.")
@@ -200,59 +150,38 @@ def validate_dataset() -> None:
         loan_id = repayment["loan_id"]
 
         if loan_id not in loan_ids:
-            errors.append(
-                f"Repayment {repayment['repayment_id']} references an unknown loan."
-            )
+            errors.append(f"Repayment {repayment['repayment_id']} references an unknown loan.")
             continue
 
         if repayment["customer_id"] not in customer_ids:
-            errors.append(
-                f"Repayment {repayment['repayment_id']} "
-                "references an unknown customer."
-            )
+            errors.append(f"Repayment {repayment['repayment_id']} references an unknown customer.")
 
         loan = loan_by_id[loan_id]
         if repayment["customer_id"] != loan["customer_id"]:
-            errors.append(
-                f"Repayment {repayment['repayment_id']} and loan have different owners."
-            )
+            errors.append(f"Repayment {repayment['repayment_id']} and loan have different owners.")
 
         if repayment["principal_due"] <= 0:
-            errors.append(
-                f"Repayment {repayment['repayment_id']} has an invalid amount."
-            )
+            errors.append(f"Repayment {repayment['repayment_id']} has an invalid amount.")
 
         if repayment["status"] not in {"PAID", "PENDING", "OVERDUE"}:
-            errors.append(
-                f"Repayment {repayment['repayment_id']} has an invalid status."
-            )
+            errors.append(f"Repayment {repayment['repayment_id']} has an invalid status.")
 
         due_date = date.fromisoformat(repayment["due_date"])
 
         if repayment["status"] == "PAID":
             if not repayment["paid_at"]:
-                errors.append(
-                    f"Paid repayment {repayment['repayment_id']} lacks paid_at."
-                )
+                errors.append(f"Paid repayment {repayment['repayment_id']} lacks paid_at.")
             elif date.fromisoformat(repayment["paid_at"]) > reference_date:
-                errors.append(
-                    f"Repayment {repayment['repayment_id']} is paid in the future."
-                )
+                errors.append(f"Repayment {repayment['repayment_id']} is paid in the future.")
 
         elif repayment["paid_at"] is not None:
-            errors.append(
-                f"Unpaid repayment {repayment['repayment_id']} has paid_at set."
-            )
+            errors.append(f"Unpaid repayment {repayment['repayment_id']} has paid_at set.")
 
         if repayment["status"] == "OVERDUE" and due_date >= reference_date:
-            errors.append(
-                f"Overdue repayment {repayment['repayment_id']} is not past due."
-            )
+            errors.append(f"Overdue repayment {repayment['repayment_id']} is not past due.")
 
         if repayment["status"] == "PENDING" and due_date < reference_date:
-            errors.append(
-                f"Pending repayment {repayment['repayment_id']} is already past due."
-            )
+            errors.append(f"Pending repayment {repayment['repayment_id']} is already past due.")
 
         repayments_by_loan[loan_id].append(repayment)
 
@@ -261,21 +190,14 @@ def validate_dataset() -> None:
         application = application_by_id.get(loan["application_id"])
 
         if application is None:
-            errors.append(
-                f"Loan {loan_id} references an unknown application."
-            )
+            errors.append(f"Loan {loan_id} references an unknown application.")
             continue
 
         if application["status"] != "APPROVED":
-            errors.append(
-                f"Loan {loan_id} is linked to a "
-                f"{application['status']} application."
-            )
+            errors.append(f"Loan {loan_id} is linked to a {application['status']} application.")
 
         if loan["customer_id"] != application["customer_id"]:
-            errors.append(
-                f"Loan {loan_id} and its application have different owners."
-            )
+            errors.append(f"Loan {loan_id} and its application have different owners.")
 
         if loan["principal"] <= 0:
             errors.append(f"Loan {loan_id} has an invalid principal.")
@@ -295,19 +217,13 @@ def validate_dataset() -> None:
                 f"found {len(schedule)}."
             )
 
-        installment_numbers = [
-            repayment["installment_number"] for repayment in schedule
-        ]
+        installment_numbers = [repayment["installment_number"] for repayment in schedule]
         expected_numbers = list(range(1, loan["term_months"] + 1))
 
         if installment_numbers != expected_numbers:
-            errors.append(
-                f"Loan {loan_id} has missing, duplicate or unordered instalments."
-            )
+            errors.append(f"Loan {loan_id} has missing, duplicate or unordered instalments.")
 
-        scheduled_principal = sum(
-            repayment["principal_due"] for repayment in schedule
-        )
+        scheduled_principal = sum(repayment["principal_due"] for repayment in schedule)
 
         if scheduled_principal != loan["principal"]:
             errors.append(
@@ -316,9 +232,7 @@ def validate_dataset() -> None:
             )
 
         calculated_outstanding = sum(
-            repayment["principal_due"]
-            for repayment in schedule
-            if repayment["status"] != "PAID"
+            repayment["principal_due"] for repayment in schedule if repayment["status"] != "PAID"
         )
 
         if calculated_outstanding != loan["outstanding_balance"]:
@@ -334,9 +248,7 @@ def validate_dataset() -> None:
             if loan["outstanding_balance"] != 0:
                 errors.append(f"Repaid loan {loan_id} has an outstanding balance.")
 
-            if schedule and any(
-                repayment["status"] != "PAID" for repayment in schedule
-            ):
+            if schedule and any(repayment["status"] != "PAID" for repayment in schedule):
                 errors.append(f"Repaid loan {loan_id} has unpaid instalments.")
 
         elif loan["status"] == "OVERDUE":
@@ -351,9 +263,7 @@ def validate_dataset() -> None:
                 errors.append(f"Active loan {loan_id} has no outstanding principal.")
 
             if "OVERDUE" in statuses:
-                errors.append(
-                    f"Active loan {loan_id} has an overdue instalment."
-                )
+                errors.append(f"Active loan {loan_id} has an overdue instalment.")
 
         else:
             errors.append(f"Loan {loan_id} has unknown status {loan['status']}.")
@@ -367,8 +277,7 @@ def validate_dataset() -> None:
         "lost_card",
         "active_loan",
         "insufficient_history",
-}
-
+    }
 
     missing_scenarios = required_scenarios - scenarios
     if missing_scenarios:

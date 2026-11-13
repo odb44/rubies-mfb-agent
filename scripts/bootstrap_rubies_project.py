@@ -8,6 +8,7 @@ Existing files are never overwritten. This script creates only missing paths.
 It does not move documentation or evaluation assets and does not create uv.lock;
 run `uv lock` after reviewing pyproject.toml.
 """
+
 from __future__ import annotations
 
 import sys
@@ -22,8 +23,6 @@ DIRECTORIES = [
     "apps/banking_api/tests",
     "apps/loan_model/src/rubies_loan_model",
     "apps/loan_model/tests",
-    "apps/mcp_server/src/rubies_mcp_server",
-    "apps/mcp_server/tests",
     "packages/shared/src/rubies_shared",
     "packages/shared/tests",
     "packages/security/src/rubies_security",
@@ -55,7 +54,6 @@ INIT_FILES = [
     "apps/agent/src/rubies_agent/__init__.py",
     "apps/banking_api/src/rubies_banking_api/__init__.py",
     "apps/loan_model/src/rubies_loan_model/__init__.py",
-    "apps/mcp_server/src/rubies_mcp_server/__init__.py",
     "packages/shared/src/rubies_shared/__init__.py",
     "packages/security/src/rubies_security/__init__.py",
     "packages/knowledge_base/src/rubies_knowledge_base/__init__.py",
@@ -141,6 +139,7 @@ check_untyped_defs = true
 """,
 }
 
+
 def write_if_missing(relative: str, text: str) -> str:
     target = ROOT / relative
     if target.exists():
@@ -149,9 +148,13 @@ def write_if_missing(relative: str, text: str) -> str:
     target.write_text(text, encoding="utf-8")
     return f"created: {relative}"
 
+
 def main() -> int:
     if not (ROOT / "docs").exists():
-        print("ERROR: Run this script from the Rubies repository root (expected ./docs).", file=sys.stderr)
+        print(
+            "ERROR: Run this script from the Rubies repository root (expected ./docs).",
+            file=sys.stderr,
+        )
         return 2
 
     messages = []
@@ -171,8 +174,12 @@ def main() -> int:
 
     print("\n".join(messages))
     print("\nNext: review pyproject.toml, then run `uv lock` and `uv sync`.")
-    print("No existing file was overwritten; documentation and locked evaluation data were not modified.")
+    print(
+        "No existing file was overwritten; " \
+        "documentation and locked evaluation data were not modified."
+    )
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

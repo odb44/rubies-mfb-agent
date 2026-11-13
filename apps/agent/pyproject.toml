@@ -1,3 +1,4 @@
+
 [project]
 name = "rubies-agent"
 version = "0.1.0"
@@ -9,7 +10,7 @@ dependencies = [
     "fastapi>=0.115,<1",
     "httpx>=0.27,<1",
     "rubies-knowledge-base",
-    "rubies-mcp-server",
+    "rubies-loan-model",
     "rubies-observability",
     "rubies-shared",
     "strands-agents>=1.55.0,<2",
@@ -25,6 +26,6 @@ packages = ["src/rubies_agent"]
 
 [tool.uv.sources]
 rubies-knowledge-base = { workspace = true }
-rubies-mcp-server = { workspace = true }
+rubies-loan-model = { workspace = true }
 rubies-observability = { workspace = true }
 rubies-shared = { workspace = true }

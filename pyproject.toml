@@ -30,7 +30,6 @@ members = [
     "apps/agent",
     "apps/banking_api",
     "apps/loan_model",
-    "apps/mcp_server",
     "packages/knowledge_base",
     "packages/observability",
     "packages/security",
@@ -39,6 +38,13 @@ members = [
 
 [tool.pytest.ini_options]
 testpaths = [
+    "apps/agent/tests",
+    "apps/banking_api/tests",
+    "apps/loan_model/tests",
+    "packages/knowledge_base/tests",
+    "packages/observability/tests",
+    "packages/security/tests",
+    "packages/shared/tests",
     "docs/evaluation/evaluators/tests",
 ]
 pythonpath = [

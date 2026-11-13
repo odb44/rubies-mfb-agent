@@ -22,12 +22,15 @@ flowchart TB
         Conversation[Conversation manager]
         SessionAdapter[Strands File Session Manager adapter]
         ToolRouter[Tool router and registry]
+        ToolModules[Registered domain tool modules]
+        BankingClient[Banking API HTTP client]
         ConfirmCoordinator[Agent-side confirmation coordinator]
         Handoff[Handoff manager]
         AgentAPI --> Orchestrator
         AgentAPI --> Conversation
         Conversation --> SessionAdapter
         Orchestrator --> ToolRouter
+        ToolRouter --> ToolModules --> BankingClient
         Orchestrator --> ConfirmCoordinator
         Orchestrator --> Handoff
     end
@@ -42,12 +45,6 @@ flowchart TB
         BankingRoutes --> Identity --> Domain --> Persistence
     end
 
-    subgraph MCPProcess[MCP server runtime boundary]
-        MCPEntry[MCP entry point]
-        MCPAuthorization[Per-tool authorization]
-        MCPTools[Registered MCP tools]
-        MCPEntry --> MCPAuthorization --> MCPTools
-    end
 
     subgraph KnowledgeRuntime[Knowledge retrieval boundary]
         Retrieval[Retrieval and citation assembly]
@@ -67,8 +64,7 @@ flowchart TB
 
     Customer -->|"HTTPS / request-response"| AgentAPI
     SessionAdapter --> SessionFiles
-    ToolRouter -->|"Authorized tool request"| MCPEntry
-    MCPTools -->|"Banking operation API call"| BankingRoutes
+    BankingClient -->|"Authenticated HTTP requests"| BankingRoutes
     Orchestrator -->|"Knowledge query"| Retrieval
     Orchestrator -->|"Eligibility request"| Inference
     Persistence --> PostgreSQL
@@ -77,7 +73,6 @@ flowchart TB
 
     AgentProcess -.-> Observability
     BankingProcess -.-> Observability
-    MCPProcess -.-> Observability
     KnowledgeRuntime -.-> Observability
     LoanRuntime -.-> Observability
 
@@ -101,9 +96,9 @@ The Banking API provides the authoritative interface for banking operations. It 
 
 All banking reads and writes pass through this boundary. Other components must not bypass it by directly accessing banking tables.
 
-### 3.3 MCP runtime
+### 3.3 Direct agent tool execution
 
-The MCP server exposes registered tools and applies per-tool authorization. For banking operations, it calls the Banking API. It does not connect directly to PostgreSQL.
+Registered domain tools execute in-process within the agent runtime. They validate inputs and call the Banking API through the dedicated HTTP client. The agent does not connect directly to PostgreSQL, and the Banking API remains authoritative for identity, ownership, permissions, confirmation lifecycle, and domain validation.
 
 ### 3.4 Knowledge retrieval runtime and local index
 
@@ -132,8 +127,8 @@ The handoff manager prepares a concise, privacy-conscious case summary. The conc
 |---|---|---|---|
 | Customer client | Agent API | Submit message and receive response | Synchronous request/response |
 | Agent runtime | Session manager | Load/save conversation state | Local adapter call |
-| Agent tool router | MCP server | Invoke registered tool | Synchronous tool request |
-| MCP server | Banking API | Execute authorized banking operation | API request/response |
+| Agent tool router | Direct tool modules | Invoke registered tool | In-process function call |
+| Direct tool modules | Banking API | Execute authorized banking operation | HTTP API request/response |
 | Agent orchestration | Knowledge retrieval | Retrieve policy evidence | Synchronous retrieval |
 | Agent orchestration | Loan model | Assess eligibility | Synchronous inference |
 | Banking API | PostgreSQL | Read/write authoritative records | Database transaction |
@@ -165,7 +160,7 @@ Those decisions should be documented later when deployment requirements are clea
 
 - [ ] Runtime boundaries reflect the agreed component architecture.
 - [ ] The Banking API remains the only application boundary for banking operations.
-- [ ] MCP does not access PostgreSQL directly.
+- [ ] Agent tools do not access PostgreSQL directly.
 - [ ] Session files remain distinct from banking and confirmation persistence.
 - [ ] The initial synchronous execution model is accurately represented.
 - [ ] Sensitive actions retain expiry, single-use approval, audit, and safe-retry requirements.

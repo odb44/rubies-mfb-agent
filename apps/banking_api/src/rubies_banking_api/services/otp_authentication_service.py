@@ -9,12 +9,12 @@ from threading import Lock
 from uuid import uuid4
 
 import jwt
+from rubies_security.authentication import TokenSettings
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from rubies_banking_api.config import get_settings
 from rubies_banking_api.models.customer import Customer
-from rubies_security.authentication import TokenSettings
 
 
 class OTPAuthenticationError(Exception):
@@ -94,21 +94,15 @@ class OTPAuthenticationService:
             challenge = self._challenges.get(normalized_phone)
 
             if challenge is None:
-                raise OTPAuthenticationError(
-                    "Verification code is invalid or has expired."
-                )
+                raise OTPAuthenticationError("Verification code is invalid or has expired.")
 
             if time.time() >= challenge.expires_at:
                 self._challenges.pop(normalized_phone, None)
-                raise OTPAuthenticationError(
-                    "Verification code is invalid or has expired."
-                )
+                raise OTPAuthenticationError("Verification code is invalid or has expired.")
 
             if challenge.attempts_remaining <= 0:
                 self._challenges.pop(normalized_phone, None)
-                raise OTPAuthenticationError(
-                    "Too many incorrect attempts. Request a new code."
-                )
+                raise OTPAuthenticationError("Too many incorrect attempts. Request a new code.")
 
             if not secrets.compare_digest(challenge.otp, otp.strip()):
                 remaining = challenge.attempts_remaining - 1
@@ -133,9 +127,7 @@ class OTPAuthenticationService:
             )
         )
         if customer is None:
-            raise OTPAuthenticationError(
-                "Unable to verify this customer. Request a new code."
-            )
+            raise OTPAuthenticationError("Unable to verify this customer. Request a new code.")
 
         settings = get_settings()
         settings.validate_jwt_configuration()

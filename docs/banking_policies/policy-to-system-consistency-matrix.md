@@ -39,7 +39,7 @@ The following are not contradictions to fix by guessing. They are decisions or e
 1. **Regulatory KYC configuration:** selected account category, applicable current CBN instruments, identity requirements, numeric limits, restriction behavior, and compliance reviewer.
 2. **Human handoff operation:** actual queue/channel, service-level targets if any, priority mapping, acknowledgement semantics, and fallback when the handoff tool fails.
 3. **Canonical API/tool schemas:** exact field names, enum values, error shapes, correlation/idempotency fields, and ownership checks.
-4. **Common audit event:** mandatory fields, secret redaction, access control, retention, and correlation across agent, MCP, Banking API, and model inference.
+4. **Common audit event:** mandatory fields, secret redaction, access control, retention, and correlation across agent, agent tools, Banking API, and model inference.
 5. **Knowledge versioning:** active policy version, effective dates, source-section identifiers, superseded-document behavior, and citation validation.
 6. **Loan product terms:** rates, fees, repayment schedules, and disbursement terms remain undefined unless a separately approved source is introduced.
 7. **Synthetic fixture coverage:** ensure fixtures actually include the intended failed transfer, duplicate debit, card customer, and active-loan cases without using real customer identifiers or secrets.

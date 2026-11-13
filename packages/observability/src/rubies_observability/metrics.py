@@ -8,10 +8,8 @@ from math import isfinite
 from threading import Lock
 from typing import Any
 
-
 ALLOWED_COMPONENTS = frozenset({
     "agent",
-    "mcp_server",
     "banking_api",
 })
 

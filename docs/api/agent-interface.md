@@ -119,7 +119,7 @@ Handoff must create or route a support record through the designated component. 
 
 ## 9. Scope boundaries
 
-This contract does not define Banking API endpoints/database schemas, internal Strands implementation, authentication mechanism/token format, pending-confirmation schema/expiry duration/idempotency-key format, MCP contracts, source-document version metadata beyond document/section, streaming, asynchronous jobs, or WebSockets. Those belong in their respective artifacts.
+This contract does not define Banking API endpoints/database schemas, internal Strands implementation, authentication mechanism/token format, pending-confirmation schema/expiry duration/idempotency-key format, direct agent tool contracts, source-document version metadata beyond document/section, streaming, asynchronous jobs, or WebSockets. Those belong in their respective artifacts.
 
 ## 10. Acceptance checklist
 

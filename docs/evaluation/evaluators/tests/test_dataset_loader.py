@@ -1,4 +1,5 @@
 """Unit tests for evaluation/evaluators/dataset_loader.py."""
+
 import json
 import tempfile
 import unittest
@@ -16,16 +17,21 @@ class DatasetLoaderTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.schema = self.root / "schema.json"
-        self.schema.write_text(json.dumps({
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": "object",
-            "required": ["id", "question"],
-            "properties": {
-                "id": {"type": "string", "minLength": 1},
-                "question": {"type": "string", "minLength": 1},
-            },
-            "additionalProperties": False,
-        }), encoding="utf-8")
+        self.schema.write_text(
+            json.dumps(
+                {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "required": ["id", "question"],
+                    "properties": {
+                        "id": {"type": "string", "minLength": 1},
+                        "question": {"type": "string", "minLength": 1},
+                    },
+                    "additionalProperties": False,
+                }
+            ),
+            encoding="utf-8",
+        )
         self.data = self.root / "data.jsonl"
 
     def tearDown(self):
@@ -34,7 +40,9 @@ class DatasetLoaderTests(unittest.TestCase):
     def load(self, text, fail_on_invalid=True):
         self.data.write_text(text, encoding="utf-8")
         return load_jsonl_dataset(
-            self.data, self.schema, dataset_type="test",
+            self.data,
+            self.schema,
+            dataset_type="test",
             fail_on_invalid=fail_on_invalid,
         )
 
@@ -76,14 +84,16 @@ class DatasetLoaderTests(unittest.TestCase):
     def test_missing_dataset_fails(self):
         with self.assertRaises(DatasetLoadError):
             load_jsonl_dataset(
-                self.root / "missing.jsonl", self.schema,
+                self.root / "missing.jsonl",
+                self.schema,
                 dataset_type="test",
             )
 
     def test_missing_schema_fails(self):
         with self.assertRaises(DatasetLoadError):
             load_jsonl_dataset(
-                self.data, self.root / "missing-schema.json",
+                self.data,
+                self.root / "missing-schema.json",
                 dataset_type="test",
             )
 
@@ -98,7 +108,11 @@ class DatasetLoaderTests(unittest.TestCase):
         schemas = self.root / "schemas"
         datasets.mkdir()
         schemas.mkdir()
-        for name in ("rag-question.schema.json", "tool-scenario.schema.json", "safety-case.schema.json"):
+        for name in (
+            "rag-question.schema.json",
+            "tool-scenario.schema.json",
+            "safety-case.schema.json",
+        ):
             (schemas / name).write_text(self.schema.read_text(encoding="utf-8"), encoding="utf-8")
         (datasets / "rag-policy-questions-v0.2.jsonl").write_text(
             '{"id":"R1","question":"hello"}', encoding="utf-8"

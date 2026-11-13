@@ -38,6 +38,31 @@ class CardService:
         self.confirmation_repository = confirmation_repository
         self.audit_repository = audit_repository
 
+    def list_customer_cards(self, identity: CustomerIdentity) -> list[Card]:
+        """List cards belonging to the verified, authenticated customer."""
+        verified_identity = require_verified_identity(identity)
+
+        customer = self.customer_repository.get_by_reference(
+            verified_identity.customer_id
+        )
+
+        if customer is None:
+            raise CustomerMismatchError(
+                "The verified customer could not be found."
+            )
+
+        require_customer_match(
+            verified_identity,
+            customer.customer_reference,
+        )
+
+        if not customer.is_active:
+            raise CustomerMismatchError(
+                "The customer account is not active."
+            )
+
+        return self.card_repository.list_by_customer(customer.id)    
+
     def block_card(
         self,
         identity: CustomerIdentity,
@@ -64,14 +89,10 @@ class CardService:
         db = self.card_repository.db
 
         try:
-            customer = self.customer_repository.get_by_reference(
-                verified_identity.customer_id
-            )
+            customer = self.customer_repository.get_by_reference(verified_identity.customer_id)
 
             if customer is None:
-                raise CustomerMismatchError(
-                    "The verified customer could not be found."
-                )
+                raise CustomerMismatchError("The verified customer could not be found.")
 
             require_customer_match(
                 verified_identity,
@@ -79,23 +100,15 @@ class CardService:
             )
 
             if not customer.is_active:
-                raise CustomerMismatchError(
-                    "The customer account is not active."
-                )
+                raise CustomerMismatchError("The customer account is not active.")
 
-            card = self.card_repository.get_by_reference_for_update(
-                normalized_reference
-            )
+            card = self.card_repository.get_by_reference_for_update(normalized_reference)
 
             if card is None:
                 raise ValueError("The requested card could not be found.")
 
             if card.customer_id != customer.id:
-                raise CustomerMismatchError(
-                    "The card does not belong to this customer."
-                )
-
-            
+                raise CustomerMismatchError("The card does not belong to this customer.")
 
             payload = {"card_reference": normalized_reference}
             payload_hash = hash_confirmation_payload(payload)

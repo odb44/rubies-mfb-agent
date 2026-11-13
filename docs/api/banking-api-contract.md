@@ -144,7 +144,7 @@ Do not log passwords, tokens, secrets, full payment credentials, or unnecessary 
 
 ## 10. Explicitly out of scope for this draft
 
-This draft does not decide:
+The following decisions are outside this contract's scope:
 
 - final endpoint paths, HTTP methods, or versioning strategy;
 - exact request/response JSON schemas for each operation;
@@ -169,3 +169,8 @@ These decisions should be made in the corresponding detailed contracts, without 
 - [ ] Operation results are structured and distinguish definitive from unknown outcomes.
 - [ ] Initial development and evaluation use synthetic data only.
 - [ ] The scope boundaries and deferred decisions are accepted before detailed endpoint design.
+
+
+## Authenticated session introspection
+
+`GET /api/auth/session` requires the normal bearer token and returns only the trusted `customer_id` and `session_id` claims after the Banking API validates issuer, audience, expiry, and verified-customer status. It exists for internal application boundaries such as the agent API; it does not replace authorization and ownership checks on individual banking endpoints.

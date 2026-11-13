@@ -1,8 +1,10 @@
+
 from __future__ import annotations
 
 import argparse
+import calendar
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -10,17 +12,28 @@ from sqlalchemy.engine import make_url
 
 from rubies_banking_api.config import get_settings
 from rubies_banking_api.db.database import SessionLocal
-from rubies_banking_api.models.customer import Customer
 from rubies_banking_api.models.account import Account
-from rubies_banking_api.models.transaction import Transaction
 from rubies_banking_api.models.card import Card
+from rubies_banking_api.models.customer import Customer
+from rubies_banking_api.models.loan import Loan
 from rubies_banking_api.models.loan_application import LoanApplication
+from rubies_banking_api.models.repayment import Repayment
+from rubies_banking_api.models.transaction import Transaction
+from rubies_banking_api.models.loan_eligibility_profile import (
+    LoanEligibilityProfile,
+)
 
 
 # Reserved exclusively for this local demonstration.
 DEMO_PREFIX = "CUST-DEMO-"
 ACCOUNT_PREFIX = "90000000"
+LOAN_PREFIX = "DEMO-LOAN-"
+REPAYMENT_PREFIX = "DEMO-REPAY-"
 LAGOS = ZoneInfo("Africa/Lagos")
+
+LOAN_PRINCIPAL = Decimal("200000.00")
+LOAN_TERM_MONTHS = 6
+MONEY_QUANTUM = Decimal("0.01")
 
 PROFILES = [
     {
@@ -32,6 +45,8 @@ PROFILES = [
         "card": "DEMO-CARD-001",
         "masked_card": "**** **** **** 1001",
         "application": "DEMO-APP-001",
+        "application_status": "APPROVED",
+        "loan_scenario": "ACTIVE",
     },
     {
         "reference": "CUST-DEMO-002",
@@ -42,6 +57,8 @@ PROFILES = [
         "card": "DEMO-CARD-002",
         "masked_card": "**** **** **** 1002",
         "application": "DEMO-APP-002",
+        "application_status": "APPROVED",
+        "loan_scenario": "OVERDUE",
     },
     {
         "reference": "CUST-DEMO-003",
@@ -52,6 +69,8 @@ PROFILES = [
         "card": "DEMO-CARD-003",
         "masked_card": "**** **** **** 1003",
         "application": "DEMO-APP-003",
+        "application_status": "APPROVED",
+        "loan_scenario": "REPAID",
     },
     {
         "reference": "CUST-DEMO-004",
@@ -62,6 +81,8 @@ PROFILES = [
         "card": "DEMO-CARD-004",
         "masked_card": "**** **** **** 1004",
         "application": "DEMO-APP-004",
+        "application_status": "APPROVED",
+        "loan_scenario": None,
     },
     {
         "reference": "CUST-DEMO-005",
@@ -72,8 +93,46 @@ PROFILES = [
         "card": "DEMO-CARD-005",
         "masked_card": "**** **** **** 1005",
         "application": "DEMO-APP-005",
+        "application_status": "PENDING",
+        "loan_scenario": None,
     },
 ]
+
+
+# Synthetic financial data reserved exclusively for local demonstrations.
+# These values are not customer-submitted or verified financial information.
+ELIGIBILITY_PROFILE_FIXTURES = {
+    "CUST-DEMO-001": {
+        "employment_type": "SALARIED",
+        "monthly_income": Decimal("450000.00"),
+        "monthly_expenses": Decimal("180000.00"),
+        "existing_monthly_debt": Decimal("50000.00"),
+    },
+    "CUST-DEMO-002": {
+        "employment_type": "SALARIED",
+        "monthly_income": Decimal("350000.00"),
+        "monthly_expenses": Decimal("160000.00"),
+        "existing_monthly_debt": Decimal("40000.00"),
+    },
+    "CUST-DEMO-003": {
+        "employment_type": "BUSINESS_OWNER",
+        "monthly_income": Decimal("600000.00"),
+        "monthly_expenses": Decimal("250000.00"),
+        "existing_monthly_debt": Decimal("75000.00"),
+    },
+    "CUST-DEMO-004": {
+        "employment_type": "SELF_EMPLOYED",
+        "monthly_income": Decimal("300000.00"),
+        "monthly_expenses": Decimal("140000.00"),
+        "existing_monthly_debt": Decimal("0.00"),
+    },
+    "CUST-DEMO-005": {
+        "employment_type": "SALARIED",
+        "monthly_income": Decimal("250000.00"),
+        "monthly_expenses": Decimal("120000.00"),
+        "existing_monthly_debt": Decimal("25000.00"),
+    },
+}
 
 
 def assert_safe_database() -> None:
@@ -89,6 +148,16 @@ def assert_safe_database() -> None:
             "Refusing to seed. Expected the local PostgreSQL database "
             "'rubies_mfb' on localhost. Check your database configuration."
         )
+
+
+def add_months(value: date, months: int) -> date:
+    """Add calendar months without overflowing the destination month."""
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+
+    return date(year, month, day)
 
 
 def get_or_create_customer(db, profile: dict) -> Customer:
@@ -265,21 +334,312 @@ def get_or_create_loan_application(
         application = LoanApplication(
             application_reference=reference,
             customer_id=customer.id,
-            requested_amount=Decimal("200000.00"),
+            requested_amount=LOAN_PRINCIPAL,
             currency="NGN",
             purpose="Personal expenses",
-            status="PENDING",
+            status=profile["application_status"],
             applied_at=applied_at,
         )
         db.add(application)
+        db.flush()
     else:
-        application.requested_amount = Decimal("200000.00")
+        application.requested_amount = LOAN_PRINCIPAL
         application.currency = "NGN"
         application.purpose = "Personal expenses"
-        application.status = "PENDING"
+        application.status = profile["application_status"]
         application.applied_at = applied_at
 
     return application
+
+
+def build_repayment_schedule(
+    scenario: str,
+    today: date,
+    disbursed_at: date,
+) -> list[dict]:
+    """Build a deterministic six-installment principal repayment schedule."""
+    base_installment = (
+        LOAN_PRINCIPAL / LOAN_TERM_MONTHS
+    ).quantize(MONEY_QUANTUM, rounding=ROUND_DOWN)
+
+    installments = [
+        base_installment
+        for _ in range(LOAN_TERM_MONTHS - 1)
+    ]
+    installments.append(
+        LOAN_PRINCIPAL - sum(installments)
+    )
+
+    schedule = []
+
+    for number, principal_due in enumerate(installments, start=1):
+        due_date = add_months(disbursed_at, number)
+
+        if scenario == "ACTIVE":
+            repayment_status = (
+                "PAID" if number == 1 else "PENDING"
+            )
+        elif scenario == "OVERDUE":
+            if number <= 2:
+                repayment_status = "PAID"
+            elif number == 3:
+                repayment_status = "OVERDUE"
+            else:
+                repayment_status = "PENDING"
+        elif scenario == "REPAID":
+            repayment_status = "PAID"
+        else:
+            raise ValueError(
+                f"Unsupported demo loan scenario: {scenario}"
+            )
+
+        paid_at = None
+
+        if repayment_status == "PAID":
+            # Keep payment timestamps before their due dates.
+            paid_datetime = datetime.combine(
+                due_date - timedelta(days=1),
+                time(12, 0),
+                tzinfo=UTC,
+            )
+            paid_at = paid_datetime
+
+        schedule.append(
+            {
+                "installment_number": number,
+                "principal_due": principal_due,
+                "due_date": due_date,
+                "status": repayment_status,
+                "paid_at": paid_at,
+            }
+        )
+
+    return schedule
+
+
+def get_or_create_loan(
+    db,
+    customer: Customer,
+    application: LoanApplication,
+    profile: dict,
+    today: date,
+) -> Loan | None:
+    """Create or update a reserved demo loan and its repayment schedule."""
+    scenario = profile["loan_scenario"]
+
+    if scenario is None:
+        # The application is intentionally approved but not disbursed,
+        # or remains pending. Do not create a loan.
+        existing_loan = db.scalar(
+            select(Loan).where(
+                Loan.application_id == application.id
+            )
+        )
+
+        if existing_loan is not None:
+            raise RuntimeError(
+                f"{profile['application']} is configured without a "
+                "disbursed loan, but an existing loan is linked to it. "
+                "Refusing to delete or silently alter that loan."
+            )
+
+        return None
+
+    suffix = profile["reference"][-3:]
+    loan_reference = f"{LOAN_PREFIX}{suffix}"
+
+    loan = db.scalar(
+        select(Loan).where(
+            Loan.loan_reference == loan_reference
+        )
+    )
+
+    if loan is not None and (
+        loan.customer_id != customer.id
+        or loan.application_id != application.id
+    ):
+        raise RuntimeError(
+            f"Loan {loan_reference} belongs to another customer "
+            "or application."
+        )
+
+    # The application_id is unique on Loan. Check for a conflicting
+    # loan reference linked to this application before creating anything.
+    linked_loan = db.scalar(
+        select(Loan).where(
+            Loan.application_id == application.id
+        )
+    )
+
+    if linked_loan is not None and linked_loan.loan_reference != loan_reference:
+        raise RuntimeError(
+            f"Application {application.application_reference} is already "
+            f"linked to loan {linked_loan.loan_reference}."
+        )
+
+    if scenario == "ACTIVE":
+        disbursed_date = today - timedelta(days=45)
+        loan_status = "ACTIVE"
+    elif scenario == "OVERDUE":
+        disbursed_date = today - timedelta(days=125)
+        loan_status = "OVERDUE"
+    elif scenario == "REPAID":
+        disbursed_date = today - timedelta(days=210)
+        loan_status = "REPAID"
+    else:
+        raise ValueError(
+            f"Unsupported demo loan scenario: {scenario}"
+        )
+
+    schedule = build_repayment_schedule(
+        scenario,
+        today,
+        disbursed_date,
+    )
+
+    outstanding_balance = sum(
+        (
+            item["principal_due"]
+            for item in schedule
+            if item["status"] != "PAID"
+        ),
+        Decimal("0.00"),
+    )
+
+    disbursed_at = datetime.combine(
+        disbursed_date,
+        time(10, 0),
+        tzinfo=UTC,
+    )
+
+    if loan is None:
+        loan = Loan(
+            loan_reference=loan_reference,
+            application_id=application.id,
+            customer_id=customer.id,
+            principal=LOAN_PRINCIPAL,
+            currency="NGN",
+            term_months=LOAN_TERM_MONTHS,
+            status=loan_status,
+            outstanding_balance=outstanding_balance,
+            disbursed_at=disbursed_at,
+        )
+        db.add(loan)
+        db.flush()
+    else:
+        loan.principal = LOAN_PRINCIPAL
+        loan.currency = "NGN"
+        loan.term_months = LOAN_TERM_MONTHS
+        loan.status = loan_status
+        loan.outstanding_balance = outstanding_balance
+        loan.disbursed_at = disbursed_at
+
+    for item in schedule:
+        repayment_reference = (
+            f"{REPAYMENT_PREFIX}{suffix}-{item['installment_number']:02d}"
+        )
+
+        repayment = db.scalar(
+            select(Repayment).where(
+                Repayment.repayment_reference == repayment_reference
+            )
+        )
+
+        if repayment is not None and repayment.loan_id != loan.id:
+            raise RuntimeError(
+                f"Repayment {repayment_reference} belongs to another loan."
+            )
+
+        if repayment is None:
+            repayment = Repayment(
+                repayment_reference=repayment_reference,
+                loan_id=loan.id,
+                installment_number=item["installment_number"],
+                principal_due=item["principal_due"],
+                due_date=item["due_date"],
+                status=item["status"],
+                paid_at=item["paid_at"],
+            )
+            db.add(repayment)
+        else:
+            repayment.installment_number = item["installment_number"]
+            repayment.principal_due = item["principal_due"]
+            repayment.due_date = item["due_date"]
+            repayment.status = item["status"]
+            repayment.paid_at = item["paid_at"]
+
+    db.flush()
+
+    # Reconcile the persisted schedule against the loan balance.
+    persisted_repayments = db.scalars(
+        select(Repayment).where(
+            Repayment.loan_id == loan.id
+        )
+    ).all()
+
+    persisted_balance = sum(
+        (
+            repayment.principal_due
+            for repayment in persisted_repayments
+            if repayment.status != "PAID"
+        ),
+        Decimal("0.00"),
+    )
+
+    if persisted_balance != loan.outstanding_balance:
+        raise RuntimeError(
+            f"Loan balance reconciliation failed for {loan_reference}: "
+            f"loan balance={loan.outstanding_balance}, "
+            f"unpaid scheduled principal={persisted_balance}."
+        )
+
+    if len(persisted_repayments) != LOAN_TERM_MONTHS:
+        raise RuntimeError(
+            f"Expected {LOAN_TERM_MONTHS} repayments for {loan_reference}; "
+            f"found {len(persisted_repayments)}."
+        )
+
+    return loan
+
+
+def get_or_create_eligibility_profile(
+    db,
+    customer: Customer,
+    customer_reference: str,
+) -> LoanEligibilityProfile:
+    """Create a synthetic, unverified eligibility fixture if it is missing."""
+    fixture = ELIGIBILITY_PROFILE_FIXTURES.get(customer_reference)
+
+    if fixture is None:
+        raise RuntimeError(
+            f"Missing eligibility fixture for {customer_reference}."
+        )
+
+    existing = db.scalar(
+        select(LoanEligibilityProfile).where(
+            LoanEligibilityProfile.customer_id == customer.id
+        )
+    )
+
+    if existing is not None:
+        # Preserve any existing customer profile, including its source,
+        # financial values and verification state.
+        return existing
+
+    eligibility_profile = LoanEligibilityProfile(
+        customer_id=customer.id,
+        employment_type=fixture["employment_type"],
+        monthly_income=fixture["monthly_income"],
+        monthly_expenses=fixture["monthly_expenses"],
+        existing_monthly_debt=fixture["existing_monthly_debt"],
+        profile_source="DEMO_FIXTURE",
+        verification_status="UNVERIFIED",
+        verified_at=None,
+    )
+
+    db.add(eligibility_profile)
+    db.flush()
+    return eligibility_profile
 
 
 def seed_demo_data(db) -> None:
@@ -287,19 +647,32 @@ def seed_demo_data(db) -> None:
     yesterday = today_lagos - timedelta(days=1)
 
     yesterday_morning = datetime.combine(
-        yesterday, time(9, 15), tzinfo=LAGOS
+        yesterday,
+        time(9, 15),
+        tzinfo=LAGOS,
     ).astimezone(UTC)
 
     yesterday_later = datetime.combine(
-        yesterday, time(9, 17), tzinfo=LAGOS
+        yesterday,
+        time(9, 17),
+        tzinfo=LAGOS,
     ).astimezone(UTC)
 
     today_morning = datetime.combine(
-        today_lagos, time(10, 30), tzinfo=LAGOS
+        today_lagos,
+        time(10, 30),
+        tzinfo=LAGOS,
     ).astimezone(UTC)
 
     for profile in PROFILES:
         customer = get_or_create_customer(db, profile)
+
+        get_or_create_eligibility_profile(
+            db=db,
+            customer=customer,
+            customer_reference=profile["reference"],
+        )
+
         account = get_or_create_account(db, customer, profile)
 
         # Use reserved, deterministic references so rerunning the seed
@@ -352,18 +725,34 @@ def seed_demo_data(db) -> None:
 
         get_or_create_card(db, customer, profile)
 
-        get_or_create_loan_application(
+        application = get_or_create_loan_application(
             db=db,
             customer=customer,
             profile=profile,
             applied_at=today_morning,
         )
 
+        loan = get_or_create_loan(
+            db=db,
+            customer=customer,
+            application=application,
+            profile=profile,
+            today=today_lagos,
+        )
+
+        loan_summary = (
+            f"{loan.loan_reference} ({loan.status})"
+            if loan is not None
+            else "No disbursed loan"
+        )
+
         print(
             f"Prepared {profile['reference']}: "
             f"{profile['name']} | "
             f"phone={customer.phone_number} | "
-            f"account={account.account_number}"
+            f"account={account.account_number} | "
+            f"application={application.status} | "
+            f"loan={loan_summary}"
         )
 
     db.flush()
@@ -379,6 +768,18 @@ def seed_demo_data(db) -> None:
         if customer is None:
             raise RuntimeError(
                 f"Verification failed for {profile['reference']}."
+            )
+
+        eligibility_profile = db.scalar(
+            select(LoanEligibilityProfile).where(
+                LoanEligibilityProfile.customer_id == customer.id
+            )
+        )
+
+        if eligibility_profile is None:
+            raise RuntimeError(
+                f"Eligibility profile verification failed for "
+                f"{profile['reference']}."
             )
 
         account = db.scalar(
@@ -432,12 +833,80 @@ def seed_demo_data(db) -> None:
                 f"{profile['reference']}."
             )
 
+        loan = db.scalar(
+            select(Loan).where(
+                Loan.application_id == application.id
+            )
+        )
+
+        if profile["loan_scenario"] is None:
+            if loan is not None:
+                raise RuntimeError(
+                    f"Unexpected disbursed loan for "
+                    f"{profile['reference']}."
+                )
+        else:
+            if loan is None:
+                raise RuntimeError(
+                    f"Loan verification failed for {profile['reference']}."
+                )
+
+            if loan.customer_id != customer.id:
+                raise RuntimeError(
+                    f"Loan ownership verification failed for "
+                    f"{profile['reference']}."
+                )
+
+            expected_status = profile["loan_scenario"]
+
+            if loan.status != expected_status:
+                raise RuntimeError(
+                    f"Expected loan status {expected_status} for "
+                    f"{profile['reference']}; found {loan.status}."
+                )
+
+            repayments = db.scalars(
+                select(Repayment).where(
+                    Repayment.loan_id == loan.id
+                )
+            ).all()
+
+            if len(repayments) != LOAN_TERM_MONTHS:
+                raise RuntimeError(
+                    f"Repayment verification failed for "
+                    f"{profile['reference']}."
+                )
+
+            unpaid_principal = sum(
+                (
+                    repayment.principal_due
+                    for repayment in repayments
+                    if repayment.status != "PAID"
+                ),
+                Decimal("0.00"),
+            )
+
+            if unpaid_principal != loan.outstanding_balance:
+                raise RuntimeError(
+                    f"Outstanding balance does not reconcile for "
+                    f"{profile['reference']}."
+                )
+
     print("\nVerification passed:")
     print("- 5 demo customers")
     print("- 5 independently owned accounts")
+    print("- 5 loan eligibility profiles present")
+    print("- Newly created synthetic profiles remain UNVERIFIED")
     print("- 20 demo transactions")
     print("- 5 active demo debit cards")
-    print("- 5 pending loan applications")
+    print("- 3 disbursed demo loans")
+    print("- 1 active loan")
+    print("- 1 overdue loan")
+    print("- 1 fully repaid loan")
+    print("- 18 repayment schedule entries")
+    print("- 1 approved application awaiting disbursement")
+    print("- 1 pending loan application")
+    print("- Loan balances reconcile with unpaid principal.")
     print("- Existing unrelated records are not deleted.")
 
 
@@ -474,4 +943,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    

@@ -22,6 +22,7 @@ from rubies_banking_api.repositories.customer_repository import CustomerReposito
 from rubies_banking_api.repositories.dispute_repository import DisputeRepository
 from rubies_banking_api.services.confirmation_payload import (
     hash_confirmation_payload,
+    normalize_confirmation_payload,
 )
 
 DISPUTE_CATEGORIES = frozenset(
@@ -63,14 +64,10 @@ class DisputeService:
         """Resolve a verified customer reference to its database record."""
         verified_identity = require_verified_identity(identity)
 
-        customer = self.customer_repository.get_by_reference(
-            verified_identity.customer_id
-        )
+        customer = self.customer_repository.get_by_reference(verified_identity.customer_id)
 
         if customer is None:
-            raise CustomerMismatchError(
-                "The verified customer could not be found."
-            )
+            raise CustomerMismatchError("The verified customer could not be found.")
 
         require_customer_match(
             verified_identity,
@@ -78,9 +75,7 @@ class DisputeService:
         )
 
         if not customer.is_active:
-            raise CustomerMismatchError(
-                "The customer account is not active."
-            )
+            raise CustomerMismatchError("The customer account is not active.")
 
         return customer
 
@@ -105,9 +100,7 @@ class DisputeService:
 
         if transaction is not None:
             if transaction.account.customer_id != customer.id:
-                raise CustomerMismatchError(
-                    "The transaction does not belong to this customer."
-                )
+                raise CustomerMismatchError("The transaction does not belong to this customer.")
 
         return customer
 
@@ -138,12 +131,19 @@ class DisputeService:
             transaction=transaction,
         )
 
-        payload = {
+        confirmation_payload: dict[str, str] = {
             "category": normalized_category,
             "description": normalized_description,
-            "transaction_id": transaction.id if transaction is not None else None,
         }
-        payload_hash = hash_confirmation_payload(payload)
+
+        if transaction is not None:
+            confirmation_payload["transaction_reference"] = transaction.reference
+
+        canonical_payload = normalize_confirmation_payload(
+            "OPEN_DISPUTE",
+            confirmation_payload,
+        )
+        payload_hash = hash_confirmation_payload(canonical_payload)
 
         current_time = now or datetime.now(UTC)
         if current_time.tzinfo is None or current_time.utcoffset() is None:
@@ -163,9 +163,7 @@ class DisputeService:
             dispute = Dispute(
                 case_reference=case_reference,
                 customer_id=customer.id,
-                transaction_id=(
-                    transaction.id if transaction is not None else None
-                ),
+                transaction_id=(transaction.id if transaction is not None else None),
                 category=normalized_category,
                 description=normalized_description,
                 status="OPEN",
@@ -183,9 +181,7 @@ class DisputeService:
                 details={
                     "case_reference": case_reference,
                     "category": normalized_category,
-                    "transaction_id": (
-                        transaction.id if transaction is not None else None
-                    ),
+                    "transaction_id": (transaction.id if transaction is not None else None),
                 },
             )
             self.audit_repository.record(audit_event)

@@ -14,15 +14,11 @@ class TransactionRepository:
         self.db = db
 
     def get_account_by_number(self, account_number: str) -> Account | None:
-        statement = select(Account).where(
-            Account.account_number == account_number
-        )
+        statement = select(Account).where(Account.account_number == account_number)
         return self.db.scalar(statement)
 
     def get_by_reference(self, reference: str) -> Transaction | None:
-        statement = select(Transaction).where(
-            Transaction.reference == reference
-        )
+        statement = select(Transaction).where(Transaction.reference == reference)
         return self.db.scalar(statement)
 
     def list_by_account(

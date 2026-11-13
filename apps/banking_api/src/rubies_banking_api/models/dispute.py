@@ -34,8 +34,7 @@ class Dispute(Base):
             name="valid_dispute_category",
         ),
         CheckConstraint(
-            "status IN ('OPEN', 'IN_REVIEW', 'AWAITING_CUSTOMER', "
-            "'RESOLVED', 'CLOSED')",
+            "status IN ('OPEN', 'IN_REVIEW', 'AWAITING_CUSTOMER', 'RESOLVED', 'CLOSED')",
             name="valid_dispute_status",
         ),
     )

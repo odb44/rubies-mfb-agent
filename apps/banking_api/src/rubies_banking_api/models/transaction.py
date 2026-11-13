@@ -29,8 +29,7 @@ class Transaction(Base):
             name="amount_positive",
         ),
         CheckConstraint(
-            "transaction_type IN "
-            "('DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'PAYMENT')",
+            "transaction_type IN ('DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'PAYMENT')",
             name="valid_transaction_type",
         ),
         CheckConstraint(

@@ -95,7 +95,6 @@ def workflow(db_session: Session):
     payload = {
         "category": "DUPLICATE_DEBIT",
         "description": "Synthetic integration test dispute.",
-        "transaction_id": None,
     }
 
     def create_approved_confirmation():

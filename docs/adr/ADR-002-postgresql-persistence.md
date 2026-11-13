@@ -14,7 +14,7 @@ The approved architecture also uses other forms of storage for different purpose
 
 Use **PostgreSQL as the authoritative persistence layer for banking-domain data** and for other structured, transactional records assigned to the banking API, including pending-action confirmation state and audit history.
 
-The banking API owns access to this persistence boundary. The agent, retrieval pipeline, loan model, and MCP interface must use approved application or service contracts rather than directly modifying banking tables.
+The banking API owns access to this persistence boundary. The agent, retrieval pipeline, loan model, and agent tool interface must use approved application or service contracts rather than directly modifying banking tables.
 
 The conceptual data model includes the following record groups:
 

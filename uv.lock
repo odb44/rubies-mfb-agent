@@ -23,7 +23,6 @@ members = [
     "rubies-banking-api",
     "rubies-knowledge-base",
     "rubies-loan-model",
-    "rubies-mcp-server",
     "rubies-mfb-agent",
     "rubies-observability",
     "rubies-security",
@@ -4173,7 +4172,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "rubies-knowledge-base" },
-    { name = "rubies-mcp-server" },
+    { name = "rubies-loan-model" },
     { name = "rubies-observability" },
     { name = "rubies-shared" },
     { name = "strands-agents" },
@@ -4187,7 +4186,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "rubies-knowledge-base", editable = "packages/knowledge_base" },
-    { name = "rubies-mcp-server", editable = "apps/mcp_server" },
+    { name = "rubies-loan-model", editable = "apps/loan_model" },
     { name = "rubies-observability", editable = "packages/observability" },
     { name = "rubies-shared", editable = "packages/shared" },
     { name = "strands-agents", specifier = ">=1.55.0,<2" },
@@ -4275,29 +4274,6 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2,<4" },
     { name = "rubies-shared", editable = "packages/shared" },
     { name = "scikit-learn", specifier = ">=1.5,<2" },
-]
-
-[[package]]
-name = "rubies-mcp-server"
-version = "0.1.0"
-source = { editable = "apps/mcp_server" }
-dependencies = [
-    { name = "mcp" },
-    { name = "rubies-banking-api" },
-    { name = "rubies-loan-model" },
-    { name = "rubies-observability" },
-    { name = "rubies-security" },
-    { name = "rubies-shared" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mcp", specifier = ">=1.28,<2" },
-    { name = "rubies-banking-api", editable = "apps/banking_api" },
-    { name = "rubies-loan-model", editable = "apps/loan_model" },
-    { name = "rubies-observability", editable = "packages/observability" },
-    { name = "rubies-security", editable = "packages/security" },
-    { name = "rubies-shared", editable = "packages/shared" },
 ]
 
 [[package]]

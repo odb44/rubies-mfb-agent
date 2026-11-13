@@ -2,7 +2,7 @@
 
 **Document ID:** RUBIES-KB-FAQ-001  
 **Target location:** `docs/banking_policies/customer-faq.md`  
-**Status:** Design draft  
+**Status:Final
 **Applies to:** Rubies MFB Customer Support Agent and its synthetic banking environment  
 **Version:** 0.1  
 **Last updated:** 2026-10-24

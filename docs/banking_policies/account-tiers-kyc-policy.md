@@ -1,7 +1,7 @@
 # Account Tiers and KYC Policy
 
 - **Document ID:** RUBIES-POL-KYC-001
-- **Status:** Design draft
+- **Status:Final
 - **Owner:** Project owner / Banking policy owner (to be assigned)
 - **Applies to:** Synthetic customer/account data, customer-support explanations, and account-tier-related business rules in the Rubies MFB capstone
 - **Related documents:** `docs/banking_policies/customer-verification-account-access-policy.md`; `docs/security/security-model.md`; `docs/security/threat-model-security-controls.md`

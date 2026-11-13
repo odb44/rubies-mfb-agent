@@ -1,10 +1,10 @@
 # Customer Verification and Account-Access Policy
 
 - **Document ID:** RUBIES-POL-SEC-001
-- **Status:** Design draft
+- **Status:Final
 - **Owner:** Project owner / Banking policy owner (to be assigned)
-- **Applies to:** Rubies MFB Customer Support Agent, Agent API, tool router, MCP server, Banking API/services, and human-handoff preparation
-- **Related documents:** `docs/security/security-model.md`; `docs/security/threat-model-security-controls.md`; `docs/security/security-test-plan.md`; `docs/api/agent-interface.md`; `docs/api/banking-api-contract.md`; `docs/api/mcp-tool-contracts.md`
+- **Applies to:** Rubies MFB Customer Support Agent, Agent API, direct agent tools, Banking API/services, and human-handoff preparation
+- **Related documents:** `docs/security/security-model.md`; `docs/security/threat-model-security-controls.md`; `docs/security/security-test-plan.md`; `docs/api/agent-interface.md`; `docs/api/banking-api-contract.md`; `docs/api/agent-tool-contracts.md`
 - **Implementation status:** Policy requirements for the synthetic capstone; not evidence of regulatory approval or implemented controls
 
 ## 1. Purpose
@@ -43,7 +43,7 @@ This is a **support-access policy**, not a complete customer-onboarding, anti-mo
 3. Where a customer identifier is supplied to help locate a record, it may be treated only as a lookup input to an approved verification flow. It is not proof of identity or authority.
 4. If the trusted context is missing, invalid, expired, or inconsistent, the system must deny protected customer-specific operations and direct the user to the approved authentication or recovery path.
 5. The system must not fall back to a customer identity inferred from conversation history, a retrieved document, or model-generated tool arguments.
-6. The Banking API/service must enforce the customer binding and resource ownership independently of the model's interpretation and the MCP caller's request.
+6. The Banking API/service must enforce the customer binding and resource ownership independently of the model's interpretation and the agent tool caller's request.
 
 ## 5. Access classes and required checks
 
@@ -84,7 +84,7 @@ Before any customer-scoped read or state change, the Banking API/service must ve
 - Any required verification and action-specific checks are satisfied.
 - The request complies with applicable business rules.
 
-The agent and MCP server must not be treated as substitutes for backend authorization. A resource identifier supplied by a caller is a selector, not proof of ownership.
+The agent must not be treated as a substitute for backend authorization. A resource identifier supplied by a caller is a selector, not proof of ownership.
 
 ### Cross-customer requests
 

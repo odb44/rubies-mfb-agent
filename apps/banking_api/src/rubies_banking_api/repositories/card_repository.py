@@ -19,11 +19,7 @@ class CardRepository:
 
     def get_by_reference_for_update(self, card_reference: str) -> Card | None:
         """Retrieve and lock a card for a state-changing operation."""
-        statement = (
-            select(Card)
-            .where(Card.card_reference == card_reference)
-            .with_for_update()
-        )
+        statement = select(Card).where(Card.card_reference == card_reference).with_for_update()
         return self.db.scalar(statement)
 
     def save(self, card: Card) -> Card:
@@ -31,3 +27,12 @@ class CardRepository:
         self.db.add(card)
         self.db.flush()
         return card
+
+    def list_by_customer(self, customer_id: int) -> list[Card]:
+        """Retrieve all cards belonging to a customer."""
+        statement = (
+            select(Card)
+            .where(Card.customer_id == customer_id)
+            .order_by(Card.created_at.desc(), Card.id.desc())
+        )
+        return list(self.db.scalars(statement).all())

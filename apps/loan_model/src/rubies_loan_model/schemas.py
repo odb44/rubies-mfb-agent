@@ -37,9 +37,7 @@ class LoanApplicantInput:
         for field_name, allowed_values in categorical_options.items():
             value = getattr(self, field_name)
             if not isinstance(value, str) or value not in allowed_values:
-                raise ValueError(
-                    f"{field_name} must be one of {sorted(allowed_values)}."
-                )
+                raise ValueError(f"{field_name} must be one of {sorted(allowed_values)}.")
 
         numeric_fields = (
             "ApplicantIncome",
@@ -99,4 +97,3 @@ class LoanModelPrediction:
         """Return a JSON-compatible representation."""
 
         return asdict(self)
-    

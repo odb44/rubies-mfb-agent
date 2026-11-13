@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Version:** 0.1
 - **Repository path:** `docs/architecture/diagrams/component-diagram.mmd`
-- **Related artifacts:** `docs/architecture/architecture-sketch.md`, `docs/architecture/component-architecture.md`, `docs/architecture/diagrams/system-context.mmd`, `docs/api/agent-interface.md`, `docs/api/banking-api-contract.md`, `docs/api/mcp-tool-contracts.md`, `docs/adr/ADR-008-agent-execution-and-confirmation-lifecycle.md`
+- **Related artifacts:** `docs/architecture/architecture-sketch.md`, `docs/architecture/component-architecture.md`, `docs/architecture/diagrams/system-context.mmd`, `docs/api/agent-interface.md`, `docs/api/banking-api-contract.md`, `docs/api/agent-tool-contracts.md`, `docs/adr/ADR-008-agent-execution-and-confirmation-lifecycle.md`
 
 ## Purpose
 
@@ -54,11 +54,10 @@ flowchart TB
         BankingRoutes --> Identity --> Domain --> Persistence --> PG
     end
 
-    subgraph MCPApp["apps/mcp_server — MCP Server"]
-        MCPEntry[MCP Entry Point]
-        MCPRegistry[Registered MCP Tools and Input Schemas]
-        MCPAuth[Per-tool Permission Checks]
-        MCPEntry --> MCPRegistry --> MCPAuth
+    subgraph AgentTools["apps/agent — Direct Tool Execution"]
+        ToolModules[Domain Tool Modules]
+        BankingClient[Banking API HTTP Client]
+        ToolModules --> BankingClient
     end
 
     subgraph LoanApp["apps/loan_model — Loan Model"]
@@ -79,8 +78,8 @@ flowchart TB
     Deps --> Security
     API --> SharedSchemas
     Orchestrator --> Retrieve
-    ToolRouter --> MCPEntry
-    MCPAuth --> BankingRoutes
+    ToolRouter --> ToolModules
+    BankingClient --> BankingRoutes
     Domain --> ConfirmManager
     Domain --> Observability
     Orchestrator --> Inference
@@ -89,9 +88,9 @@ flowchart TB
     classDef boundary fill:#d9eaf7,stroke:#134f5c,color:#222;
     classDef persistence fill:#d9ead3,stroke:#38761d,color:#222;
     classDef security fill:#fff2cc,stroke:#9a6700,color:#222;
-    class API,Orchestrator,ToolRouter,MCPEntry,BankingRoutes boundary;
+    class API,Orchestrator,ToolRouter,BankingClient,BankingRoutes boundary;
     class PG,Index,Artifacts,SessionAdapter persistence;
-    class Deps,Identity,MCPAuth,ConfirmManager security;
+    class Deps,Identity,ConfirmManager,InputValidation security;
 ```
 
 ## Component boundary notes
@@ -101,7 +100,7 @@ flowchart TB
 3. **Agent Orchestration** coordinates the model, RAG retrieval, tool proposals, response composition, and handoff decisions.
 4. **Tool Router and registered catalogue** restrict tool use to the approved nine-tool catalogue and validate tool arguments before dispatch.
 5. **Confirmation Manager** coordinates the customer-facing confirmation lifecycle, but durable pending-action state and execution enforcement are owned by trusted backend persistence/services. The agent-side manager cannot authorize a banking operation by itself.
-6. **MCP Server** exposes registered capabilities and applies per-tool permission checks. It must not access banking tables directly.
+6. **Direct agent tools** validate their inputs and call the Banking API HTTP client. The Banking API remains authoritative for permissions and ownership.
 7. **Banking API** independently enforces identity context, resource ownership, permissions, domain rules, confirmation validity, idempotency, persistence, and operation outcomes.
 8. **Knowledge Base package** ingests source documents, indexes content, retrieves evidence, and assembles document/section citations. Insufficient or conflicting evidence must result in abstention rather than guessing.
 9. **Loan Model application** runs the approved eligibility inference and returns permitted explanation fields. It does not independently authorize a customer or approve/disburse a loan.
@@ -109,6 +108,6 @@ flowchart TB
 
 ## Important consistency note
 
-The `Confirmation Manager` in the agent application is a coordination component only. The Banking API and PostgreSQL remain authoritative for pending action state and whether a state-changing operation may execute. The `Tool Router` calls the MCP server, which calls the Banking API; the agent does not call banking persistence directly.
+The `Confirmation Manager` in the agent application is a coordination component only. The Banking API and PostgreSQL remain authoritative for pending action state and whether a state-changing operation may execute. The `Tool Router` calls the agent tool runtime, which calls the Banking API; the agent does not call banking persistence directly.
 
 This diagram shows logical responsibilities only. Exact process boundaries, dependency injection, and deployment placement remain for the deployment architecture and implementation design.

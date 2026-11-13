@@ -5,13 +5,13 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
+import sys
 import time
 import uuid
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
-import sys
 
 correlation_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "rubies_correlation_id",

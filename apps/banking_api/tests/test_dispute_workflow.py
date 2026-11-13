@@ -1,3 +1,4 @@
+
 from datetime import UTC, datetime
 from unittest.mock import Mock
 
@@ -71,7 +72,6 @@ def approved_request() -> dict:
     return {
         "category": "DUPLICATE_DEBIT",
         "description": "Customer reports a duplicate debit.",
-        "transaction_id": None,
     }
 
 
@@ -109,17 +109,24 @@ def test_successful_dispute_workflow(
     assert isinstance(dispute, Dispute)
     assert dispute.case_reference.startswith("DIS-")
     assert dispute.customer_id == customer.id
+    assert dispute.transaction_id is None
     assert dispute.category == "DUPLICATE_DEBIT"
     assert dispute.status == "OPEN"
+
+    confirmation_payload = {
+        "category": "DUPLICATE_DEBIT",
+        "description": "Customer reports a duplicate debit.",
+    }
 
     confirmation_repository.consume.assert_called_once_with(
         confirmation_id="CONF-approved",
         identity=identity,
         action="OPEN_DISPUTE",
-        payload_hash=hash_confirmation_payload(approved_request),
+        payload_hash=hash_confirmation_payload(confirmation_payload),
         now=current_time,
     )
 
+    dispute_repository.add.assert_called_once_with(dispute)
     dispute_repository.db.flush.assert_called_once()
     audit_repository.record.assert_called_once()
 
@@ -130,6 +137,61 @@ def test_successful_dispute_workflow(
     assert audit_event.details["category"] == "DUPLICATE_DEBIT"
 
 
+def test_successful_dispute_workflow_with_transaction_reference(
+    service: DisputeService,
+    repositories: tuple[Mock, Mock, Mock, Mock],
+    identity: CustomerIdentity,
+    customer: Customer,
+    approved_request: dict,
+    current_time: datetime,
+) -> None:
+    (
+        dispute_repository,
+        customer_repository,
+        confirmation_repository,
+        audit_repository,
+    ) = repositories
+
+    customer_repository.get_by_reference.return_value = customer
+
+    transaction = Mock()
+    transaction.id = 123
+    transaction.reference = "DEMO-DUP-B-002"
+    transaction.account.customer_id = customer.id
+
+    dispute = service.create_dispute(
+        identity,
+        confirmation_id="CONF-transaction",
+        category=approved_request["category"],
+        description=approved_request["description"],
+        correlation_id="CORR-006",
+        transaction=transaction,
+        now=current_time,
+    )
+
+    assert isinstance(dispute, Dispute)
+    assert dispute.transaction_id == 123
+    assert dispute.customer_id == customer.id
+
+    confirmation_payload = {
+        "category": "DUPLICATE_DEBIT",
+        "description": "Customer reports a duplicate debit.",
+        "transaction_reference": "DEMO-DUP-B-002",
+    }
+
+    confirmation_repository.consume.assert_called_once_with(
+        confirmation_id="CONF-transaction",
+        identity=identity,
+        action="OPEN_DISPUTE",
+        payload_hash=hash_confirmation_payload(confirmation_payload),
+        now=current_time,
+    )
+
+    dispute_repository.add.assert_called_once_with(dispute)
+    dispute_repository.db.flush.assert_called_once()
+    audit_repository.record.assert_called_once()
+
+
 def test_missing_approval_prevents_dispute_creation(
     service: DisputeService,
     repositories: tuple[Mock, Mock, Mock, Mock],
@@ -138,9 +200,12 @@ def test_missing_approval_prevents_dispute_creation(
     approved_request: dict,
     current_time: datetime,
 ) -> None:
-    dispute_repository, customer_repository, confirmation_repository, audit_repository = (
-        repositories
-    )
+    (
+        dispute_repository,
+        customer_repository,
+        confirmation_repository,
+        audit_repository,
+    ) = repositories
 
     customer_repository.get_by_reference.return_value = customer
     confirmation_repository.consume.side_effect = ConfirmationRequiredError(
@@ -183,9 +248,12 @@ def test_wrong_session_prevents_dispute_creation(
     approved_request: dict,
     current_time: datetime,
 ) -> None:
-    dispute_repository, customer_repository, confirmation_repository, audit_repository = (
-        repositories
-    )
+    (
+        dispute_repository,
+        customer_repository,
+        confirmation_repository,
+        audit_repository,
+    ) = repositories
 
     customer_repository.get_by_reference.return_value = customer
     confirmation_repository.consume.side_effect = CustomerMismatchError(
@@ -215,9 +283,12 @@ def test_replayed_confirmation_prevents_dispute_creation(
     approved_request: dict,
     current_time: datetime,
 ) -> None:
-    dispute_repository, customer_repository, confirmation_repository, audit_repository = (
-        repositories
-    )
+    (
+        dispute_repository,
+        customer_repository,
+        confirmation_repository,
+        audit_repository,
+    ) = repositories
 
     customer_repository.get_by_reference.return_value = customer
     confirmation_repository.consume.side_effect = ConfirmationRequiredError(
@@ -247,9 +318,12 @@ def test_database_failure_rolls_back_dispute_workflow(
     approved_request: dict,
     current_time: datetime,
 ) -> None:
-    dispute_repository, customer_repository, confirmation_repository, audit_repository = (
-        repositories
-    )
+    (
+        dispute_repository,
+        customer_repository,
+        confirmation_repository,
+        audit_repository,
+    ) = repositories
 
     customer_repository.get_by_reference.return_value = customer
     audit_repository.record.side_effect = RuntimeError("Audit insert failed")
@@ -268,3 +342,5 @@ def test_database_failure_rolls_back_dispute_workflow(
     dispute_repository.add.assert_called_once()
     audit_repository.record.assert_called_once()
     dispute_repository.db.rollback.assert_called_once()
+
+

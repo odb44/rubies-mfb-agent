@@ -3,7 +3,6 @@
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
-
 from rubies_banking_api.models.support_handoff import (
     HandoffPriority,
     HandoffRoute,

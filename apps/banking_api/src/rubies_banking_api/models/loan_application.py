@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     func,
@@ -32,6 +34,10 @@ class LoanApplication(Base):
         CheckConstraint(
             "status IN ('PENDING', 'APPROVED', 'REJECTED')",
             name="valid_loan_application_status",
+        ),
+        CheckConstraint(
+            "term_months IS NULL OR term_months > 0",
+            name="valid_loan_application_term",
         ),
     )
 
@@ -67,6 +73,11 @@ class LoanApplication(Base):
         nullable=False,
     )
 
+    term_months: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -91,4 +102,3 @@ class LoanApplication(Base):
         back_populates="application",
         uselist=False,
     )
-    

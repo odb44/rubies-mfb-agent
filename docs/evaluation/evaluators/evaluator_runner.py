@@ -101,10 +101,7 @@ def _case_id(suite: str, case: Mapping[str, Any]) -> str:
         if isinstance(value, str) and value.strip():
             return value
 
-    raise ValueError(
-        f"{suite} case is missing a non-empty identifier "
-        f"({', '.join(keys)})."
-    )
+    raise ValueError(f"{suite} case is missing a non-empty identifier ({', '.join(keys)}).")
 
 
 def _dataset_report_entry(dataset: DatasetInput) -> dict[str, Any]:
@@ -115,14 +112,11 @@ def _dataset_report_entry(dataset: DatasetInput) -> dict[str, Any]:
     if digest is None:
         if not path.is_file():
             raise ValueError(
-                "Dataset hash was not supplied and source file does not exist: "
-                f"{dataset.path}"
+                f"Dataset hash was not supplied and source file does not exist: {dataset.path}"
             )
         digest = sha256_file(path)
 
-    if len(digest) != 64 or any(
-        character not in "0123456789abcdefABCDEF" for character in digest
-    ):
+    if len(digest) != 64 or any(character not in "0123456789abcdefABCDEF" for character in digest):
         raise ValueError(f"Invalid SHA-256 for dataset {dataset.path}.")
 
     return {
@@ -140,15 +134,11 @@ def _normalise_execution(
 ) -> dict[str, Any]:
     """Normalise adapter output and enforce critical-failure semantics."""
     if execution.outcome not in OUTCOMES:
-        raise ValueError(
-            f"{case_id}: unsupported outcome {execution.outcome!r}."
-        )
+        raise ValueError(f"{case_id}: unsupported outcome {execution.outcome!r}.")
 
     # A populated critical-failure list is itself evidence of a critical
     # failure, even when the adapter forgot to set critical_failure=True.
-    has_critical_failure = bool(
-        execution.critical_failure or execution.critical_failures
-    )
+    has_critical_failure = bool(execution.critical_failure or execution.critical_failures)
 
     # A critical failure can never be represented as a passing or other
     # non-failing outcome.
@@ -156,9 +146,7 @@ def _normalise_execution(
 
     critical_ids = []
     for index, failure in enumerate(execution.critical_failures, start=1):
-        failure_id = str(
-            failure.get("failure_id") or f"CF-{case_id}-{index}"
-        )
+        failure_id = str(failure.get("failure_id") or f"CF-{case_id}-{index}")
         critical_ids.append(failure_id)
 
     result: dict[str, Any] = {
@@ -166,11 +154,7 @@ def _normalise_execution(
         "outcome": outcome,
         "critical_failure": has_critical_failure,
         "assertions": list(execution.assertions),
-        "scores": (
-            dict(execution.scores)
-            if execution.scores is not None
-            else None
-        ),
+        "scores": (dict(execution.scores) if execution.scores is not None else None),
         "language": execution.language,
         "expected_response_language": execution.expected_response_language,
         "language_match_pass": execution.language_match_pass,
@@ -196,9 +180,7 @@ def _make_failure(
     return {
         "failure_id": str(failure.get("failure_id") or f"CF-{case_id}"),
         "case_id": case_id,
-        "category": str(
-            failure.get("category") or "unspecified_critical_failure"
-        ),
+        "category": str(failure.get("category") or "unspecified_critical_failure"),
         "severity": "CRITICAL",
         "evidence_ref": failure.get("evidence_ref"),
         "status": failure.get("status") or "OPEN",
@@ -237,27 +219,18 @@ def run_evaluation(
 
     started = datetime.now(UTC)
     dataset_entries: list[dict[str, Any]] = []
-    grouped: dict[str, list[dict[str, Any]]] = {
-        name: [] for name in SUITE_NAMES
-    }
+    grouped: dict[str, list[dict[str, Any]]] = {name: [] for name in SUITE_NAMES}
     critical_failures: list[dict[str, Any]] = []
     blockers: list[str] = []
 
     for dataset in datasets:
         if dataset.suite not in SUITE_NAMES:
             raise ValueError(
-                f"Unknown suite {dataset.suite!r}; "
-                f"expected one of {sorted(SUITE_NAMES)}."
+                f"Unknown suite {dataset.suite!r}; expected one of {sorted(SUITE_NAMES)}."
             )
 
-        if any(
-            entry["suite"] == dataset.suite
-            for entry in dataset_entries
-        ):
-            raise ValueError(
-                "Only one dataset per suite is supported in v0.1: "
-                f"{dataset.suite}."
-            )
+        if any(entry["suite"] == dataset.suite for entry in dataset_entries):
+            raise ValueError(f"Only one dataset per suite is supported in v0.1: {dataset.suite}.")
 
         dataset_entries.append(_dataset_report_entry(dataset))
         adapter = adapters.get(dataset.suite)
@@ -269,8 +242,7 @@ def run_evaluation(
 
             if case_id in seen:
                 raise ValueError(
-                    f"Duplicate case identifier {case_id!r} "
-                    f"in {dataset.suite} dataset."
+                    f"Duplicate case identifier {case_id!r} in {dataset.suite} dataset."
                 )
 
             seen.add(case_id)
@@ -278,31 +250,22 @@ def run_evaluation(
             if adapter is None:
                 execution = CaseExecution(
                     outcome="BLOCKED",
-                    block_reason=(
-                        "No execution adapter configured for suite "
-                        f"{dataset.suite}."
-                    ),
+                    block_reason=(f"No execution adapter configured for suite {dataset.suite}."),
                 )
             else:
                 try:
                     execution = adapter(dataset.suite, dict(case))
 
                     if not isinstance(execution, CaseExecution):
-                        raise TypeError(
-                            "Adapter must return a CaseExecution instance."
-                        )
+                        raise TypeError("Adapter must return a CaseExecution instance.")
                 except Exception as exc:
                     # Keep diagnostic details out of the generated report.
                     execution = CaseExecution(
                         outcome="BLOCKED",
                         block_reason=(
-                            f"Adapter error ({type(exc).__name__}); "
-                            "details withheld from report."
+                            f"Adapter error ({type(exc).__name__}); details withheld from report."
                         ),
-                        reviewer_notes=(
-                            "Inspect secured evaluator logs for "
-                            "diagnostic details."
-                        ),
+                        reviewer_notes=("Inspect secured evaluator logs for diagnostic details."),
                     )
 
             outcome = _normalise_execution(case_id, execution)
@@ -315,25 +278,18 @@ def run_evaluation(
                         "category": "critical_assertion_failure",
                         "evidence_ref": None,
                         "status": "OPEN",
-                        "notes": (
-                            "Adapter marked this case as a critical failure."
-                        ),
+                        "notes": ("Adapter marked this case as a critical failure."),
                     },
                 )
 
-                critical_failures.extend(
-                    _make_failure(case_id, item) for item in supplied
-                )
+                critical_failures.extend(_make_failure(case_id, item) for item in supplied)
 
             if outcome["outcome"] == "BLOCKED":
                 blockers.append(
-                    f"{dataset.suite}/{case_id}: "
-                    f"{outcome['block_reason'] or 'blocked'}"
+                    f"{dataset.suite}/{case_id}: {outcome['block_reason'] or 'blocked'}"
                 )
             elif outcome["outcome"] == "NEEDS_REVIEW":
-                blockers.append(
-                    f"{dataset.suite}/{case_id}: needs review"
-                )
+                blockers.append(f"{dataset.suite}/{case_id}: needs review")
 
     suite_results = []
     all_outcomes: list[str] = []
@@ -342,9 +298,7 @@ def run_evaluation(
         cases = grouped[suite]
 
         counts = {
-            outcome.lower(): sum(
-                1 for case in cases if case["outcome"] == outcome
-            )
+            outcome.lower(): sum(1 for case in cases if case["outcome"] == outcome)
             for outcome in (
                 "PASSED",
                 "FAILED",
@@ -355,17 +309,12 @@ def run_evaluation(
         }
 
         # Executed includes completed pass/fail and needs-review cases.
-        executed = (
-            counts["passed"]
-            + counts["failed"]
-            + counts["needs_review"]
-        )
+        executed = counts["passed"] + counts["failed"] + counts["needs_review"]
         defined = len(cases)
 
         if defined and defined < config.minimum_cases_per_suite:
             blockers.append(
-                f"{suite}: only {defined} case(s); minimum is "
-                f"{config.minimum_cases_per_suite}."
+                f"{suite}: only {defined} case(s); minimum is {config.minimum_cases_per_suite}."
             )
 
         suite_results.append(
@@ -379,20 +328,14 @@ def run_evaluation(
                 "needs_review": counts["needs_review"],
                 "not_run": counts["not_run"],
                 "metrics": {
-                    "pass_rate": (
-                        counts["passed"] / executed if executed else None
-                    ),
-                    "coverage_rate": (
-                        executed / defined if defined else 0.0
-                    ),
+                    "pass_rate": (counts["passed"] / executed if executed else None),
+                    "coverage_rate": (executed / defined if defined else 0.0),
                 },
                 "cases": cases,
             }
         )
 
-        all_outcomes.extend(
-            case["outcome"] for case in cases
-        )
+        all_outcomes.extend(case["outcome"] for case in cases)
 
     finished = datetime.now(UTC)
     total = len(all_outcomes)
@@ -400,8 +343,7 @@ def run_evaluation(
     summary = {
         "defined": total,
         "executed": sum(
-            outcome in {"PASSED", "FAILED", "NEEDS_REVIEW"}
-            for outcome in all_outcomes
+            outcome in {"PASSED", "FAILED", "NEEDS_REVIEW"} for outcome in all_outcomes
         ),
         "passed": all_outcomes.count("PASSED"),
         "failed": all_outcomes.count("FAILED"),
@@ -413,20 +355,14 @@ def run_evaluation(
 
     # Any failed case or critical failure rejects. Otherwise incomplete
     # evidence or missing suite coverage prevents acceptance.
-    missing_suites = SUITE_NAMES - {
-        entry["suite"] for entry in dataset_entries
-    }
+    missing_suites = SUITE_NAMES - {entry["suite"] for entry in dataset_entries}
 
     if critical_failures or summary["failed"] > 0:
         decision_status = "REJECT"
-        rationale = [
-            "At least one case failed or a critical failure was recorded."
-        ]
+        rationale = ["At least one case failed or a critical failure was recorded."]
 
         if blockers:
-            rationale.append(
-                "The run also has incomplete or review-required cases."
-            )
+            rationale.append("The run also has incomplete or review-required cases.")
 
     elif (
         missing_suites
@@ -436,42 +372,24 @@ def run_evaluation(
         or summary["not_run"]
     ):
         decision_status = "INCOMPLETE"
-        rationale = [
-            "Required suites or case outcomes remain incomplete."
-        ]
+        rationale = ["Required suites or case outcomes remain incomplete."]
 
         if missing_suites:
-            rationale.append(
-                "Missing suites: "
-                + ", ".join(sorted(missing_suites))
-                + "."
-            )
+            rationale.append("Missing suites: " + ", ".join(sorted(missing_suites)) + ".")
 
         rationale.extend(blockers[:20])
 
-    elif any(
-        suite["defined"] < config.minimum_cases_per_suite
-        for suite in suite_results
-    ):
+    elif any(suite["defined"] < config.minimum_cases_per_suite for suite in suite_results):
         decision_status = "INCOMPLETE"
-        rationale = [
-            "Every suite must contain at least "
-            f"{config.minimum_cases_per_suite} case(s)."
-        ]
+        rationale = [f"Every suite must contain at least {config.minimum_cases_per_suite} case(s)."]
 
     elif summary["passed"] == summary["defined"] and summary["defined"] > 0:
         decision_status = "ACCEPT"
-        rationale = [
-            "Every supplied case passed; all three suites met "
-            "minimum case coverage."
-        ]
+        rationale = ["Every supplied case passed; all three suites met minimum case coverage."]
 
     else:
         decision_status = "INCOMPLETE"
-        rationale = [
-            "No acceptance decision can be supported by the "
-            "available case evidence."
-        ]
+        rationale = ["No acceptance decision can be supported by the available case evidence."]
 
     report = {
         "schema_version": "0.1",
@@ -517,13 +435,10 @@ def run_evaluation(
 
     if errors:
         detail = "; ".join(
-            f"{'.'.join(map(str, error.absolute_path)) or '$'}: "
-            f"{error.message}"
+            f"{'.'.join(map(str, error.absolute_path)) or '$'}: {error.message}"
             for error in errors[:10]
         )
-        raise ValueError(
-            f"Generated report failed schema validation: {detail}"
-        )
+        raise ValueError(f"Generated report failed schema validation: {detail}")
 
     if report_path is not None:
         destination = Path(report_path)

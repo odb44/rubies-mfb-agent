@@ -4,7 +4,6 @@ import json
 import logging
 
 import pytest
-
 from rubies_observability import (
     JsonFormatter,
     configure_logging,
@@ -34,7 +33,7 @@ def test_logs_structured_json_with_correlation_id():
     with correlation_context("corr-test-001"):
         log_event(
             logger,
-            component="mcp_server",
+            component="agent",
             event="tool.invoked",
             outcome="success",
             metadata={"tool_name": "transaction_status"},
@@ -43,7 +42,7 @@ def test_logs_structured_json_with_correlation_id():
 
     payload = json.loads(records[0])
 
-    assert payload["component"] == "mcp_server"
+    assert payload["component"] == "agent"
     assert payload["event"] == "tool.invoked"
     assert payload["outcome"] == "success"
     assert payload["correlation_id"] == "corr-test-001"
@@ -152,7 +151,7 @@ def test_timed_operation_logs_failure_and_reraises():
     with pytest.raises(RuntimeError, match="operation failed"):
         with timed_operation(
             logger,
-            component="mcp_server",
+            component="agent",
             operation="banking_tool",
         ):
             raise RuntimeError("operation failed")

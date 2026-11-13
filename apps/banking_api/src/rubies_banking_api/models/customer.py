@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -9,6 +10,12 @@ from rubies_banking_api.db.base import Base
 
 if TYPE_CHECKING:
     from rubies_banking_api.models.account import Account
+    from rubies_banking_api.models.loan_applicant_profile import (
+        LoanApplicantProfile,
+    )
+    from rubies_banking_api.models.loan_eligibility_profile import (
+        LoanEligibilityProfile,
+    )
 
 
 class Customer(Base):
@@ -48,4 +55,16 @@ class Customer(Base):
 
     accounts: Mapped[list[Account]] = relationship(
         back_populates="customer",
+    )
+
+    loan_applicant_profile: Mapped[LoanApplicantProfile | None] = relationship(
+        back_populates="customer",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    loan_eligibility_profile: Mapped[LoanEligibilityProfile | None] = relationship(
+        back_populates="customer",
+        uselist=False,
+        cascade="all, delete-orphan",
     )

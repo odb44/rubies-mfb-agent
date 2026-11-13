@@ -2,7 +2,7 @@
 
 **Artifact ID:** RB-DES-EVAL-001  
 **Version:** 0.1  
-**Status:** Design draft  
+**Status:Final
 **Target location:** `docs/evaluation/evaluation-specification.md`  
 **Scope:** Evaluation design for the Rubies MFB Customer Support Agent capstone.  
 **Boundary:** This document defines evaluation cases, scoring, and acceptance criteria. It does not claim that datasets, evaluators, application code, or test results have been implemented.

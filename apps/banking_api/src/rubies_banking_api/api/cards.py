@@ -34,6 +34,55 @@ class BlockCardResponse(BaseModel):
     status: str
     correlation_id: str
 
+class CardListItem(BaseModel):
+    card_reference: str
+    masked_number: str
+    card_type: str
+    status: str
+
+
+class CardListResponse(BaseModel):
+    items: list[CardListItem]
+
+@router.get("", response_model=CardListResponse)
+def list_cards(
+    db: Annotated[Session, Depends(get_db)],
+    identity: Annotated[CustomerIdentity, Depends(get_customer_identity)],
+) -> CardListResponse:
+    """List cards belonging only to the authenticated customer."""
+    service = CardService(
+        card_repository=CardRepository(db),
+        customer_repository=CustomerRepository(db),
+        confirmation_repository=ConfirmationRepository(db),
+        audit_repository=AuditRepository(db),
+    )
+
+    try:
+        cards = service.list_customer_cards(identity)
+
+        return CardListResponse(
+            items=[
+                CardListItem(
+                    card_reference=card.card_reference,
+                    masked_number=card.masked_number,
+                    card_type=card.card_type,
+                    status=card.status,
+                )
+                for card in cards
+            ]
+        )
+
+    except IdentityVerificationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="A verified customer identity is required.",
+        ) from exc
+
+    except CustomerMismatchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The customer account is not available.",
+        ) from exc
 
 @router.post(
     "/{card_reference}/block",

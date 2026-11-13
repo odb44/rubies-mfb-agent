@@ -20,9 +20,9 @@ flowchart TB
     AgentAPI --> Orchestrator[Agent orchestration]
     Orchestrator --> ToolRouter[Tool router]
     ToolRouter --> Registry[Tool registry and schemas]
-    ToolRouter --> MCP[MCP server]
-    MCP --> MCPAuth[Per-tool authorization]
-    MCPAuth --> BankingAPI[Banking API]
+    ToolRouter --> ToolModules[Domain tool modules]
+    ToolModules --> BankingClient[Banking API HTTP client]
+    BankingClient --> BankingAPI[Banking API]
 
     Orchestrator --> KB[Knowledge base retrieval]
     KB --> Vector[(Local vector index)]
@@ -44,7 +44,7 @@ flowchart TB
 
     AgentAPI -.-> Obs[Observability package]
     BankingAPI -.-> Obs
-    MCP -.-> Obs
+    ToolModules -.-> Obs
     KB -.-> Obs
     Loan -.-> Obs
 ```
@@ -87,7 +87,7 @@ flowchart TB
 
 ### 3.4 Tool router and registry — `apps/agent/tools/`
 
-The registry exposes the agreed nine tools:
+The registry exposes nine core customer-support tools plus policy retrieval, account listing, and confirmation-support tools:
 
 1. `verify_customer`
 2. `get_balance`
@@ -105,15 +105,15 @@ The router validates arguments against the tool schemas and directs calls to the
 - Schema validation is not a substitute for authorization or domain validation.
 - Customer identity must be resolved from trusted session context, not model-supplied identifiers.
 
-### 3.5 MCP server — `apps/mcp_server/`
+### 3.5 Direct agent tools — `apps/agent/src/rubies_agent/tools/`
 
 **Responsibilities**
-- Expose registered tools through MCP.
-- Validate tool inputs and enforce per-tool authorization.
-- Call the Banking API for banking operations.
+- Expose registered tools grouped by banking domain.
+- Validate tool inputs and apply narrow operation allowlists.
+- Call the Banking API through `clients/banking_api_client.py`.
 
 **Boundary**
-- The MCP server does not access banking tables directly. Banking authorization and domain rules remain enforced by the Banking API.
+- Agent tools do not access banking tables directly. Banking authorization and domain rules remain enforced by the Banking API.
 
 ### 3.6 Banking API — `apps/banking_api/`
 
@@ -125,7 +125,7 @@ The router validates arguments against the tool schemas and directs calls to the
 - Return explicit outcomes, including rejected, failed, and unknown outcomes where the result cannot yet be established.
 
 **Boundary**
-- This is the authoritative application boundary for banking operations. Agent prompts, tool schemas, and MCP permissions do not replace backend enforcement.
+- This is the authoritative application boundary for banking operations. Agent prompts, tool schemas, and agent-side validation do not replace backend enforcement.
 
 ### 3.7 PostgreSQL persistence
 
@@ -191,12 +191,12 @@ These shared packages provide reusable mechanisms; they do not eliminate the nee
 |---|---|---|---|
 | Customer identity | Agent/tool adapter | Trusted identity context + Banking API | Identity comes from trusted authentication/session context |
 | Customer ownership | Banking operation | Banking API | Read/write only records belonging to the authenticated customer |
-| Tool authorization | Tool router / MCP | MCP authorization and Banking API | Enforce permissions at appropriate boundaries; backend remains authoritative |
+| Tool authorization | Tool router / direct tools | agent tool input validation and Banking API | Enforce permissions at appropriate boundaries; backend remains authoritative |
 | Sensitive action confirmation | Agent confirmation coordinator | Banking API + PostgreSQL | Validate customer, exact action, expiry, unused approval, and execution state |
 | RAG citations | Agent response builder | Knowledge base retrieval/citation assembly | Cite approved source document and section |
 | Loan explanation | Agent response builder | Loan-model component and approved policy | Report only supported output and explanation |
 | Handoff acceptance | Handoff manager | Human-support integration | Claim acceptance only after explicit acknowledgement |
-| Tool audit | Agent / MCP / Banking API | Observability and persistent audit | Record tool name, inputs, result, and outcome with sensitive values appropriately redacted |
+| Tool audit | Agent / agent tools / Banking API | Observability and persistent audit | Record tool name, inputs, result, and outcome with sensitive values appropriately redacted |
 
 ## 5. Required tool behavior
 
@@ -225,9 +225,9 @@ These shared packages provide reusable mechanisms; they do not eliminate the nee
 
 ## 7. Review checklist
 
-- [ ] All nine tools and their safety controls are represented.
+- [ ] All core and supporting tools and their safety controls are represented.
 - [ ] The Banking API remains authoritative for customer ownership, permissions, confirmations, and writes.
-- [ ] The MCP server does not bypass the Banking API.
+- [ ] The direct agent tool execution does not bypass the Banking API.
 - [ ] Session state is distinct from banking and confirmation persistence.
 - [ ] RAG citations and abstention behavior are preserved.
 - [ ] Loan explanations remain evidence-based.

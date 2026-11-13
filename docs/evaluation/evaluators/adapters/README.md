@@ -64,7 +64,7 @@ The observation provider receives a case and returns `ToolScenarioObservation`.
 
 # Safety Evaluation Adapter
 
-**Status:** implementation draft; unit tests cover evaluator logic only.
+**Status:Final
 
 ## Repository destinations
 - `safety_adapter.py` → `evaluation/evaluators/adapters/safety_adapter.py`

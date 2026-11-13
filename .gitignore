@@ -10,3 +10,22 @@ __pycache__/
 .coverage
 htmlcov/
 .idea/
+
+
+# Local database backups and debugging artefacts
+*.dump
+runtime-diff.txt
+diagnose_transaction_response.py
+
+
+# Local development and generated files
+.local/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.vscode/
+
+# Excluded loan-model stretch-goal artefacts
+artifacts/loan_model/
+artifacts/TOOL-001-20261028-142713.txt
+data/model/training/synthetic_loan_delinquency_v2.csv

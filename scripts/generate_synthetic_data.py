@@ -15,11 +15,26 @@ NOW = datetime(2026, 10, 27, 0, 0, tzinfo=UTC)
 TODAY = NOW.date()
 
 NAMES = [
-    "Ada Okafor", "Tunde Adebayo", "Chioma Eze", "Ibrahim Musa",
-    "Ngozi Obi", "Chinedu Okoro", "Amina Bello", "Emeka Nwosu",
-    "Fatima Yusuf", "Bola Adeyemi", "Kelechi Umeh", "Sadiq Abdullahi",
-    "Funmi Bakare", "David Ojo", "Amaka Ibe", "Yusuf Garba",
-    "Tosin Lawal", "Blessing James", "Samuel Danjuma", "Zainab Sule",
+    "Ada Okafor",
+    "Tunde Adebayo",
+    "Chioma Eze",
+    "Ibrahim Musa",
+    "Ngozi Obi",
+    "Chinedu Okoro",
+    "Amina Bello",
+    "Emeka Nwosu",
+    "Fatima Yusuf",
+    "Bola Adeyemi",
+    "Kelechi Umeh",
+    "Sadiq Abdullahi",
+    "Funmi Bakare",
+    "David Ojo",
+    "Amaka Ibe",
+    "Yusuf Garba",
+    "Tosin Lawal",
+    "Blessing James",
+    "Samuel Danjuma",
+    "Zainab Sule",
 ]
 
 SCENARIOS = [
@@ -142,9 +157,7 @@ def generate_dataset() -> dict[str, object]:
 
             transactions.append(
                 {
-                    "transaction_id": stable_id(
-                        f"transaction:{index}:{tx_index}"
-                    ),
+                    "transaction_id": stable_id(f"transaction:{index}:{tx_index}"),
                     "reference": f"TXN-{index:04d}-{tx_index:04d}",
                     "customer_id": customer_id,
                     "account_id": account_id,
@@ -162,11 +175,7 @@ def generate_dataset() -> dict[str, object]:
         accounts[-1]["balance"] = balance
 
     # Preserve the intended distribution of application outcomes.
-    application_statuses = (
-        ["PENDING"] * 5
-        + ["REJECTED"] * 4
-        + ["APPROVED"] * 21
-    )
+    application_statuses = ["PENDING"] * 5 + ["REJECTED"] * 4 + ["APPROVED"] * 21
     RNG.shuffle(application_statuses)
 
     approved_loan_number = 0
@@ -177,9 +186,7 @@ def generate_dataset() -> dict[str, object]:
         application_id = f"LOAN-APP-{application_index:04d}"
         application_status = application_statuses[application_index - 1]
 
-        requested_amount = RNG.choice(
-            [50_000, 100_000, 150_000, 250_000, 300_000, 500_000]
-        )
+        requested_amount = RNG.choice([50_000, 100_000, 150_000, 250_000, 300_000, 500_000])
 
         applied_date = TODAY - timedelta(days=RNG.randint(1, 120))
 
@@ -237,30 +244,22 @@ def generate_dataset() -> dict[str, object]:
 
         loan_repayments = []
 
-        for installment, principal_due in enumerate(
-            installment_amounts, start=1
-        ):
+        for installment, principal_due in enumerate(installment_amounts, start=1):
             due_date = applied_date + timedelta(days=30 * installment)
 
             if loan_status == "REPAID":
                 repayment_status = "PAID"
 
             elif loan_status == "OVERDUE":
-                repayment_status = (
-                    "OVERDUE" if due_date < TODAY else "PENDING"
-                )
+                repayment_status = "OVERDUE" if due_date < TODAY else "PENDING"
 
             else:
                 # The active loan has a 12-month term and a 90-day history.
                 # Past instalments have been paid; future ones remain pending.
-                repayment_status = (
-                    "PAID" if due_date < TODAY else "PENDING"
-                )
+                repayment_status = "PAID" if due_date < TODAY else "PENDING"
 
             repayment = {
-                "repayment_id": stable_id(
-                    f"repayment:{loan_id}:{installment}"
-                ),
+                "repayment_id": stable_id(f"repayment:{loan_id}:{installment}"),
                 "loan_id": loan_id,
                 "customer_id": customer_id,
                 "installment_number": installment,

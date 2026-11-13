@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from rubies_banking_api.api.dependencies import get_customer_identity
 from rubies_banking_api.config import get_settings
-
 from rubies_banking_api.db.database import get_db
 from rubies_banking_api.services.otp_authentication_service import (
     OTPAuthenticationError,
@@ -37,6 +37,13 @@ class OTPRequestResponse(BaseModel):
 
     message: str
     development_otp: str | None = None
+
+
+class SessionIdentityResponse(BaseModel):
+    """Trusted identity derived from a validated access token."""
+
+    customer_id: str
+    session_id: str
 
 
 class TokenResponse(BaseModel):
@@ -72,6 +79,7 @@ def request_otp(
         development_otp=development_otp,
     )
 
+
 @router.post("/verify-otp", response_model=TokenResponse)
 def verify_otp(
     request: OTPVerification,
@@ -96,3 +104,18 @@ def verify_otp(
         ) from exc
 
     return TokenResponse(**result)
+
+
+@router.get("/session", response_model=SessionIdentityResponse)
+def get_authenticated_session(
+    identity=Depends(get_customer_identity),  # noqa: B008
+) -> SessionIdentityResponse:
+    """Validate the bearer token and return its trusted identity claims.
+
+    This endpoint lets other services authenticate through the Banking API
+    without importing its internal authentication dependencies.
+    """
+    return SessionIdentityResponse(
+        customer_id=identity.customer_id,
+        session_id=identity.session_id,
+    )

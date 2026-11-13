@@ -1,4 +1,5 @@
 """Unit tests for tool_scenario_adapter.py."""
+
 import unittest
 
 from tool_scenario_adapter import (
@@ -34,10 +35,15 @@ class ToolScenarioAdapterTests(unittest.TestCase):
             "confirmation_required": False,
         }
         observation = ToolScenarioObservation(
-            tool_calls=(ObservedToolCall(
-                "get_balance", {}, "success", actor_customer_id="C-001",
-                target_customer_id="C-002",
-            ),),
+            tool_calls=(
+                ObservedToolCall(
+                    "get_balance",
+                    {},
+                    "success",
+                    actor_customer_id="C-001",
+                    target_customer_id="C-002",
+                ),
+            ),
             expected_customer_id="C-001",
             authenticated_customer_id="C-001",
         )
@@ -93,9 +99,14 @@ class ToolScenarioAdapterTests(unittest.TestCase):
             "must_reconcile_timeout": True,
         }
         observation = ToolScenarioObservation(
-            tool_calls=(ObservedToolCall(
-                "get_transaction_status", {}, "timeout", timed_out=True,
-            ),),
+            tool_calls=(
+                ObservedToolCall(
+                    "get_transaction_status",
+                    {},
+                    "timeout",
+                    timed_out=True,
+                ),
+            ),
             expected_customer_id="C-001",
             authenticated_customer_id="C-001",
             backend_action_occurred=False,
@@ -120,7 +131,9 @@ class ToolScenarioAdapterTests(unittest.TestCase):
         )
         result = evaluate_tool_scenario(case, observation)
         self.assertFalse(result.critical_failure)
-        self.assertTrue(next(a for a in result.assertions if a["assertion_id"] == "TOOL-AUDIT")["passed"])
+        self.assertTrue(
+            next(a for a in result.assertions if a["assertion_id"] == "TOOL-AUDIT")["passed"]
+        )
 
 
 if __name__ == "__main__":

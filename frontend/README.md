@@ -1,75 +1,78 @@
-# React + TypeScript + Vite
+# Rubies MFB Customer Support Agent — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The frontend provides the customer-facing interface for interacting with the Rubies MFB Customer Support Agent.
 
-Currently, two official plugins are available:
+It is built with React, TypeScript and Vite.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Technology
 
-## React Compiler
+- React 19
+- TypeScript
+- Vite 8
+- React Markdown
+- Remark GFM
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Prerequisites
 
-## Expanding the ESLint configuration
+- Node.js and npm.
+- The Rubies MFB backend services configured and running when using live application functionality.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Installation
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+From the repository root:
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```powershell
+cd frontend
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+## Development
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Start the Vite development server:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```powershell
+npm run dev
 ```
+
+Vite displays the local development URL in the terminal.
+
+## Production Build
+
+Run the TypeScript checks and create the production build:
+
+```powershell
+npm run build
+```
+
+The generated production files are placed in `dist/`.
+
+## Linting
+
+Run ESLint:
+
+```powershell
+npm run lint
+```
+
+## Preview Production Build
+
+After building, preview the production output locally:
+
+```powershell
+npm run preview
+```
+
+## Available Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start the development server |
+| `npm run build` | Run TypeScript build checks and create production assets |
+| `npm run lint` | Run ESLint |
+| `npm run preview` | Preview the production build |
+
+## Backend Integration
+
+The frontend communicates with the Rubies MFB backend services. Ensure the required backend APIs are running and that the frontend API configuration points to the correct backend address.
+
+Do not commit credentials, access tokens, or other sensitive configuration to the repository.

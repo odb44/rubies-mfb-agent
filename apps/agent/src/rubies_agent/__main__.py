@@ -4,7 +4,6 @@ import os
 import sys
 
 import uvicorn
-from fastapi.middleware.cors import CORSMiddleware
 
 
 def configure_console_encoding() -> None:

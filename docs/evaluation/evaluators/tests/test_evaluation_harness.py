@@ -23,9 +23,7 @@ class EvaluationHarnessTests(unittest.TestCase):
             evaluation_docs = Path(__file__).resolve().parents[2]
             source_datasets = evaluation_docs / "datasets"
             source_schemas = source_datasets / "schemas"
-            source_report_schema = (
-                evaluation_docs / "reports" / "report-schema.json"
-            )
+            source_report_schema = evaluation_docs / "reports" / "report-schema.json"
 
             # Copy the evaluation datasets without modifying their contents.
             for filename in (
@@ -50,9 +48,7 @@ class EvaluationHarnessTests(unittest.TestCase):
                 destination_file.write_bytes(source_file.read_bytes())
 
             # Copy the report schema into docs/evaluation/reports/.
-            (reports / "report-schema.json").write_bytes(
-                source_report_schema.read_bytes()
-            )
+            (reports / "report-schema.json").write_bytes(source_report_schema.read_bytes())
 
             report_path = reports / "run.json"
 

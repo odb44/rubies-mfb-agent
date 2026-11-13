@@ -7,9 +7,12 @@ flowchart TB
     subgraph AgentRuntime["Agent API process"]
         AgentAPI["Agent API routes"]
         Orchestrator["Agent orchestration"]
+        ToolModules["Registered domain tools"]
+        BankingClient["Banking API HTTP client"]
         Conversation["Conversation manager"]
         SessionAdapter["Strands File Session Manager adapter"]
         AgentAPI --> Orchestrator
+        Orchestrator --> ToolModules --> BankingClient
         AgentAPI --> Conversation
         Conversation --> SessionAdapter
     end
@@ -22,12 +25,6 @@ flowchart TB
         BankingAPI --> Identity --> Domain --> Persistence
     end
 
-    subgraph MCPRuntime["MCP server process"]
-        MCPEntry["MCP entry point"]
-        MCPAuth["Per-tool authorization"]
-        MCPTools["Registered tools and schemas"]
-        MCPEntry --> MCPAuth --> MCPTools
-    end
 
     subgraph KnowledgeResources["Knowledge resources"]
         Retrieval["Knowledge retrieval<br/>and citation assembly"]
@@ -49,8 +46,7 @@ flowchart TB
     Client -->|"HTTPS / request-response"| AgentAPI
     Orchestrator -->|"RAG query"| Retrieval
     Orchestrator -->|"Eligibility request"| Inference
-    Orchestrator -->|"Tool call"| MCPEntry
-    MCPTools -->|"Authorized banking operation"| BankingAPI
+    BankingClient -->|"Authenticated HTTP request"| BankingAPI
     Domain --> Postgres
     Persistence --> Postgres
     SessionAdapter --> SessionFiles
@@ -58,7 +54,6 @@ flowchart TB
     Domain -.->|"Audit / operational events"| Obs["Observability package<br/>(logs, metrics, traces)"]
     AgentRuntime -.-> Obs
     BankingRuntime -.-> Obs
-    MCPRuntime -.-> Obs
 
     Note["Deployment placement is intentionally abstract.<br/>No Docker/container, cloud-hosting, or network-topology choice is implied.<br/>Banking API is authoritative for identity, permissions, pending confirmations and banking writes."]:::note
     Note --- PersistentStores

@@ -6,20 +6,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
 from rubies_security.identity import (
     CustomerMismatchError,
     IdentityVerificationError,
 )
 from rubies_shared.identity import CustomerIdentity
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from rubies_banking_api.api.dependencies import get_customer_identity
 from rubies_banking_api.db.database import get_db
+from rubies_banking_api.models.account import Account
 from rubies_banking_api.repositories.customer_repository import (
     CustomerRepository,
 )
-from rubies_banking_api.models.account import Account
 from rubies_banking_api.repositories.transaction_repository import (
     TransactionRepository,
 )
@@ -98,9 +98,7 @@ def get_account_balance(
     if customer is None or not customer.is_active:
         raise HTTPException(status_code=403, detail="The customer account is not available.")
 
-    account = db.scalar(
-        select(Account).where(Account.account_number == account_reference)
-    )
+    account = db.scalar(select(Account).where(Account.account_number == account_reference))
     if account is None or account.customer_id != customer.id:
         raise HTTPException(status_code=404, detail="The requested account is not available.")
     if account.status != "ACTIVE":
@@ -115,6 +113,7 @@ def get_account_balance(
             "status": account.status,
         },
     }
+
 
 @router.get("/api/accounts/me")
 def get_my_accounts(
@@ -157,6 +156,7 @@ def get_my_accounts(
             "count": len(accounts),
         },
     }
+
 
 @router.get(
     "/api/accounts/{account_reference}/mini-statement",

@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
 from rubies_banking_api.models.support_handoff import HandoffStatus
 from rubies_banking_api.services.support_handoff_service import (
     SupportHandoffService,

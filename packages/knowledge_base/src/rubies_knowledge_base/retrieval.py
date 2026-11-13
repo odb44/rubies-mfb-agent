@@ -59,6 +59,33 @@ def _clean_markdown(text: str) -> str:
     text = re.sub(r"[#>*_~]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
+def _flush_policy_paragraphs(
+    paragraphs: list[str],
+    *,
+    source: str,
+    title: str,
+    section: str,
+    chunks: list[PolicyChunk],
+) -> None:
+    """Convert buffered paragraphs into a policy chunk."""
+    if not paragraphs:
+        return
+
+    content = _clean_markdown("\n\n".join(paragraphs))
+    paragraphs.clear()
+
+    if not content:
+        return
+
+    chunks.append(
+        PolicyChunk(
+            source=source,
+            title=title,
+            section=section,
+            content=content,
+        )
+    )
+
 
 def _load_policy_chunks(
     policy_dir: str | Path | None = None,
@@ -81,30 +108,18 @@ def _load_policy_chunks(
         current_section = "General"
         paragraphs: list[str] = []
 
-        def flush_paragraphs() -> None:
-            if not paragraphs:
-                return
-
-            content = _clean_markdown("\n\n".join(paragraphs))
-            paragraphs.clear()
-
-            if not content:
-                return
-
-            chunks.append(
-                PolicyChunk(
-                    source=path.name,
-                    title=current_title,
-                    section=current_section,
-                    content=content,
-                )
-            )
-
         for line in markdown.splitlines():
             heading_match = _HEADING_PATTERN.match(line.strip())
 
             if heading_match:
-                flush_paragraphs()
+                _flush_policy_paragraphs(
+                    paragraphs,
+                    source=path.name,
+                    title=current_title,
+                    section=current_section,
+                    chunks=chunks,
+                )
+
                 heading_level = len(heading_match.group(1))
                 heading_text = _clean_markdown(heading_match.group(2))
 
@@ -117,12 +132,24 @@ def _load_policy_chunks(
                 continue
 
             if not line.strip():
-                flush_paragraphs()
+                _flush_policy_paragraphs(
+                    paragraphs,
+                    source=path.name,
+                    title=current_title,
+                    section=current_section,
+                    chunks=chunks,
+                )
                 continue
 
             paragraphs.append(line)
 
-        flush_paragraphs()
+        _flush_policy_paragraphs(
+            paragraphs,
+            source=path.name,
+            title=current_title,
+            section=current_section,
+            chunks=chunks,
+        )
 
     return chunks
 

@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from rubies_security.confirmations import ConfirmationError, ConfirmationExpiredError
 from rubies_security.identity import (
     CustomerMismatchError,
     IdentityVerificationError,
@@ -16,6 +17,9 @@ from rubies_banking_api.api.dependencies import get_customer_identity
 from rubies_banking_api.db.database import get_db
 from rubies_banking_api.repositories.confirmation_repository import (
     ConfirmationRepository,
+)
+from rubies_banking_api.services.confirmation_payload import (
+    normalize_confirmation_payload,
 )
 from rubies_banking_api.services.confirmation_service import ConfirmationService
 
@@ -52,6 +56,20 @@ def get_confirmation_service(db: Session) -> ConfirmationService:
     return ConfirmationService(ConfirmationRepository(db))
 
 
+def _normalize_request_payload(
+    action: str,
+    payload: dict[str, str],
+) -> dict:
+    """Normalize action-specific payloads at the HTTP boundary."""
+    try:
+        return normalize_confirmation_payload(action, payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
 @router.post("", response_model=CreateConfirmationResponse)
 def create_confirmation(
     request: CreateConfirmationRequest,
@@ -73,13 +91,14 @@ def create_confirmation(
             detail="A card reference is required.",
         )
 
+    payload = _normalize_request_payload(action, request.payload)
     service = get_confirmation_service(db)
 
     try:
         confirmation = service.create(
             identity,
             action=action,
-            payload=request.payload,
+            payload=payload,
             now=datetime.now(UTC),
         )
         db.commit()
@@ -122,6 +141,7 @@ def approve_confirmation(
             detail="A card reference is required.",
         )
 
+    payload = _normalize_request_payload(action, request.payload)
     service = get_confirmation_service(db)
 
     try:
@@ -129,7 +149,7 @@ def approve_confirmation(
             identity,
             confirmation_id=request.confirmation_id,
             action=action,
-            payload=request.payload,
+            payload=payload,
             now=datetime.now(UTC),
         )
         db.commit()
@@ -150,6 +170,23 @@ def approve_confirmation(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This confirmation is not available to the authenticated customer.",
+        ) from exc
+    except ConfirmationExpiredError as exc:
+        # Persist the repository's EXPIRED state transition before returning.
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This confirmation has expired. Create a new confirmation to continue.",
+        ) from exc
+    except ConfirmationError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
         ) from exc
     except ValueError as exc:
         db.rollback()

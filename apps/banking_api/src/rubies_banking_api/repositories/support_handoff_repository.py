@@ -1,20 +1,16 @@
-"""Database operations for support handoffs."""
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from rubies_banking_api.models.support_handoff import SupportHandoff
 
 
 class SupportHandoffRepository:
-    """Persist and retrieve support handoffs."""
-
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session):
         self.db = db
 
     def add(self, handoff: SupportHandoff) -> SupportHandoff:
         self.db.add(handoff)
-        self.db.flush()
         return handoff
 
     def get_by_reference(
@@ -36,8 +32,28 @@ class SupportHandoffRepository:
         statement = (
             select(SupportHandoff)
             .where(SupportHandoff.customer_id == customer_id)
-            .order_by(SupportHandoff.created_at.desc())
+            .order_by(
+                SupportHandoff.created_at.desc(),
+                SupportHandoff.id.desc(),
+            )
             .limit(limit)
         )
         return list(self.db.scalars(statement).all())
-    
+
+    def list_all(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[SupportHandoff]:
+        """List all support handoffs for the staff support desk."""
+        statement = (
+            select(SupportHandoff)
+            .options(joinedload(SupportHandoff.customer))
+            .order_by(
+                SupportHandoff.created_at.desc(),
+                SupportHandoff.id.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(self.db.scalars(statement).all())

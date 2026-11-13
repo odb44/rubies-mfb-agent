@@ -2,7 +2,7 @@
 
 **Artifact ID:** RB-EVAL-CONTRACT-001  
 **Target repository path:** `evaluation/evaluators/evaluator-contract.md`  
-**Status:** Prepared design draft — review required  
+**Status:Final
 **Version:** 0.1  
 **Scope:** Contract for running the prepared RAG, tool-scenario, and safety/adversarial evaluation datasets and producing a report compatible with the Evaluation Report Schema v0.1.
 
@@ -200,4 +200,4 @@ Resolve before implementation or first meaningful run:
 
 ## 13. Readiness statement
 
-This contract is a prepared design draft. It does not mean an evaluator exists, the JSON Schema has been validated, datasets are approved, tests have run, or thresholds have been formally accepted. The next step is to review this contract, then implement the machine-readable schemas and a small evaluator harness in the agreed repository layout.
+This is the final evaluator contract. It does not assert that an evaluator exists, JSON Schemas have been validated, datasets are approved, tests have run, or thresholds have been formally accepted. Those are separate implementation and validation activities.

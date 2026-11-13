@@ -1,7 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-
 from rubies_observability.metrics import MetricsRegistry
 
 
@@ -105,7 +104,7 @@ def test_concurrent_updates_are_thread_safe(
     def record_many(_: int) -> None:
         for _ in range(100):
             registry.record(
-                component="mcp_server",
+                component="agent",
                 operation="get_transaction_status",
                 outcome="success",
                 duration_ms=25.0,

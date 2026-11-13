@@ -25,9 +25,7 @@ class ConfirmationRepository:
         return confirmation
 
     def get_by_reference(self, confirmation_id: str) -> Confirmation | None:
-        statement = select(Confirmation).where(
-            Confirmation.confirmation_id == confirmation_id
-        )
+        statement = select(Confirmation).where(Confirmation.confirmation_id == confirmation_id)
         return self.db.scalar(statement)
 
     def approve(
@@ -56,28 +54,17 @@ class ConfirmationRepository:
         if record is None:
             raise ConfirmationRequiredError("A valid confirmation is required.")
 
-        if (
-            record.customer_id != identity.customer_id
-            or record.session_id != identity.session_id
-        ):
-            raise CustomerMismatchError(
-                "Confirmation does not belong to this customer session."
-            )
+        if record.customer_id != identity.customer_id or record.session_id != identity.session_id:
+            raise CustomerMismatchError("Confirmation does not belong to this customer session.")
 
         if record.action != action or record.payload_hash != payload_hash:
-            raise ConfirmationRequiredError(
-                "Confirmation does not authorize this action."
-            )
+            raise ConfirmationRequiredError("Confirmation does not authorize this action.")
 
         if record.status == "CONSUMED":
-            raise ConfirmationAlreadyConsumedError(
-                "Confirmation has already been used."
-            )
+            raise ConfirmationAlreadyConsumedError("Confirmation has already been used.")
 
         if record.status != "PENDING":
-            raise ConfirmationRequiredError(
-                "Confirmation is not awaiting approval."
-            )
+            raise ConfirmationRequiredError("Confirmation is not awaiting approval.")
 
         if current_time >= record.expires_at:
             record.status = "EXPIRED"
@@ -115,28 +102,17 @@ class ConfirmationRepository:
         if record is None:
             raise ConfirmationRequiredError("A valid confirmation is required.")
 
-        if (
-            record.customer_id != identity.customer_id
-            or record.session_id != identity.session_id
-        ):
-            raise CustomerMismatchError(
-                "Confirmation does not belong to this customer session."
-            )
+        if record.customer_id != identity.customer_id or record.session_id != identity.session_id:
+            raise CustomerMismatchError("Confirmation does not belong to this customer session.")
 
         if record.action != action or record.payload_hash != payload_hash:
-            raise ConfirmationRequiredError(
-                "Confirmation does not authorize this action."
-            )
+            raise ConfirmationRequiredError("Confirmation does not authorize this action.")
 
         if record.status == "CONSUMED":
-            raise ConfirmationAlreadyConsumedError(
-                "Confirmation has already been used."
-            )
+            raise ConfirmationAlreadyConsumedError("Confirmation has already been used.")
 
         if record.status != "APPROVED":
-            raise ConfirmationRequiredError(
-                "Confirmation has not been approved."
-            )
+            raise ConfirmationRequiredError("Confirmation has not been approved.")
 
         if current_time >= record.expires_at:
             record.status = "EXPIRED"

@@ -2,7 +2,7 @@
 
 **Artifact ID:** RB-DES-EVAL-SCHEMA-001  
 **Version:** 0.1  
-**Status:** Prepared design draft — review required  
+**Status:Final
 **Target location:** `evaluation/reports/report-schema.json`  
 **Purpose:** Define the machine-readable structure for one evaluation run and its per-case evidence.  
 **Boundary:** This is a schema draft only. It does not implement the evaluator, execute tests, or provide baseline results.

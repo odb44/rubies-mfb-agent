@@ -2,7 +2,7 @@
 
 **Document ID:** RB-POL-CUA-001  
 **Version:** 0.1  
-**Status:** Design draft  
+**Status:Final
 **Policy owner:** Customer Experience and Card Operations  
 **Applies to:** Synthetic Rubies MFB capstone environment only  
 **Effective date:** 1 October 2026 (demo policy date; not a real bank policy)  

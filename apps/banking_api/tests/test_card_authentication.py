@@ -172,3 +172,48 @@ def test_valid_token_reaches_card_service(
 
     assert received["confirmation_id"] == "CONF-TEST-001"
     assert fake_db.committed is True
+
+
+def test_list_cards_returns_authenticated_customers_cards(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received = {}
+
+    class FakeCardService:
+        def __init__(self, **kwargs) -> None:
+            received["repositories"] = kwargs
+
+        def list_customer_cards(self, identity):
+            received["identity"] = identity
+            return [
+                SimpleNamespace(
+                    card_reference="DEMO-CARD-003",
+                    masked_number="**** **** **** 1003",
+                    card_type="DEBIT",
+                    status="ACTIVE",
+                )
+            ]
+
+    monkeypatch.setattr(cards, "CardService", FakeCardService)
+
+    token = make_token()
+
+    response = client.get(
+        "/api/cards",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0] == {
+        "card_reference": "DEMO-CARD-003",
+        "masked_number": "**** **** **** 1003",
+        "card_type": "DEBIT",
+        "status": "ACTIVE",
+    }
+
+    assert received["identity"].customer_id == "CUS-0007"
+    assert received["identity"].verified is True    

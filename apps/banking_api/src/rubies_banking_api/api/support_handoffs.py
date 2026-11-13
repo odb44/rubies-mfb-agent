@@ -1,4 +1,7 @@
+
 """Customer-facing support handoff endpoints."""
+
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -30,8 +33,8 @@ def _build_service(db: Session) -> SupportHandoffService:
 )
 def create_support_handoff(
     payload: SupportHandoffCreate,
-    db: Session = Depends(get_db),
-    identity=Depends(get_customer_identity),
+    db: Annotated[Session, Depends(get_db)],
+    identity: Annotated[object, Depends(get_customer_identity)],
 ) -> SupportHandoffResponse:
     """Create a support request for the authenticated customer."""
     service = _build_service(db)
@@ -66,9 +69,9 @@ def create_support_handoff(
     response_model=list[SupportHandoffResponse],
 )
 def list_support_handoffs(
+    db: Annotated[Session, Depends(get_db)],
+    identity: Annotated[object, Depends(get_customer_identity)],
     limit: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(get_db),
-    identity=Depends(get_customer_identity),
 ) -> list[SupportHandoffResponse]:
     """List support requests belonging to the authenticated customer."""
     service = _build_service(db)
@@ -78,10 +81,7 @@ def list_support_handoffs(
             identity=identity,
             limit=limit,
         )
-        return [
-            SupportHandoffResponse.model_validate(handoff)
-            for handoff in handoffs
-        ]
+        return [SupportHandoffResponse.model_validate(handoff) for handoff in handoffs]
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -95,8 +95,8 @@ def list_support_handoffs(
 )
 def get_support_handoff(
     reference: str,
-    db: Session = Depends(get_db),
-    identity=Depends(get_customer_identity),
+    db: Annotated[Session, Depends(get_db)],
+    identity: Annotated[object, Depends(get_customer_identity)],
 ) -> SupportHandoffResponse:
     """Retrieve a support request belonging to the authenticated customer."""
     service = _build_service(db)

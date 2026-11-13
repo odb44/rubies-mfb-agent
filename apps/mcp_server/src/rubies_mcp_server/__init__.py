@@ -1,1 +1,0 @@
-"""Rubies MFB project package."""

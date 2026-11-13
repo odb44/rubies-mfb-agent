@@ -23,8 +23,8 @@ flowchart TB
     Knowledge --> VectorIndex[(Local vector index)]
 
     Agent --> Tools[Tool router and registered tool schemas]
-    Tools --> MCP[MCP server and per-tool authorization]
-    MCP --> Banking[Banking API]
+    Tools --> BankingClient[Direct Banking API HTTP client]
+    BankingClient --> Banking[Banking API]
 
     Banking --> Identity[Trusted identity, ownership and permission checks]
     Identity --> Domain[Banking domain services]
@@ -38,7 +38,7 @@ flowchart TB
 
     Agent -.-> Observability[Logging, metrics and tracing]
     Banking -.-> Observability
-    MCP -.-> Observability
+    Tools -.-> Observability
 ```
 
 The diagram is a logical sketch, not a deployment topology. It does not imply a decision about Docker, cloud hosting, or the physical placement of processes.
@@ -50,8 +50,8 @@ The diagram is a logical sketch, not a deployment topology. It does not imply a 
 | Agent API and orchestration | Manage turns, choose between retrieval, read-only tools, sensitive actions, and handoff; compose the final response | The model may propose actions but does not grant itself permission or execute banking writes directly |
 | Conversation manager | Maintain conversation context through the Strands File Session Manager adapter | Session state is not the source of truth for identity, permissions, or banking records |
 | Knowledge base | Ingest approved policy documents, chunk and index content, retrieve evidence, and assemble document/section citations | Policy answers must be grounded in retrieved evidence; inadequate evidence requires abstention or clarification |
-| Tool router and registry | Expose the approved nine-tool catalogue and route validated calls | Tool schemas describe the interface; backend enforcement remains mandatory |
-| MCP server | Provide MCP tool access with per-tool authorization | It calls the Banking API and does not access banking tables directly |
+| Tool router and registry | Expose the nine core customer-support tools plus policy, account-listing, and confirmation-support tools | Tool schemas describe the interface; backend enforcement remains mandatory |
+| direct agent tool execution | Provide agent tool access with per-tool authorization | It calls the Banking API over HTTP and does not access banking tables directly |
 | Banking API | Enforce trusted identity, customer ownership, permissions, domain rules, confirmation state, and banking operations | Authoritative application boundary for banking actions |
 | PostgreSQL | Persist synthetic banking records, pending confirmations, and audit history | Source of truth for banking data and confirmation lifecycle |
 | Loan-model component | Evaluate eligibility using documented features and a versioned model; return supported explanation data | A model result is not a promise of loan approval or disbursement |
@@ -101,7 +101,7 @@ Handoff may be triggered by a customer request, unsafe uncertainty, or a frustra
 - **Trusted identity:** Customer identity and customer ID are derived from trusted session/authentication context, never from model-generated tool arguments.
 - **Backend authorization:** The Banking API enforces customer ownership and permissions independently of the model and agent prompts.
 - **Confirmation:** The backend validates expiry, action details, customer binding, and single-use approval before sensitive execution.
-- **No direct database access from the model or MCP server:** Banking operations go through the Banking API.
+- **No direct database access from the model or direct agent tool execution:** Banking operations go through the Banking API.
 - **Grounded policy answers:** RAG responses cite their sources; the agent abstains when the evidence is insufficient.
 - **Safe uncertainty:** Timeouts or ambiguous outcomes are not treated as proof that an action failed or succeeded.
 - **Auditability:** Tool calls record the tool name, inputs, result, and outcome, with sensitive values redacted where appropriate.
@@ -138,5 +138,5 @@ These decisions should be resolved in their respective architecture documents or
 - [ ] Component responsibilities and trust boundaries are accurate.
 - [ ] Confirmation and authorization remain enforced by the Banking API.
 - [ ] Session persistence is clearly distinguished from banking persistence and identity.
-- [ ] The architecture preserves all nine required tools and the required handoff behavior.
+- [ ] The architecture preserves all nine core customer-support tools, supporting tools, and the required handoff behavior.
 - [ ] Deferred implementation and deployment decisions are not presented as settled.

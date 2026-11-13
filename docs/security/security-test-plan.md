@@ -1,6 +1,6 @@
 # Security Test Plan
 
-- **Status:** Design draft
+- **Status:Final
 - **Scope:** Security verification for the Rubies MFB Customer Support Agent's initial tool set and service boundaries
 - **Related documents:** `docs/security/security-model.md`; `docs/security/threat-model-security-controls.md`
 - **Implementation status:** Planned tests only; results must be recorded when tests are executed
@@ -27,7 +27,7 @@ Run tests with synthetic fixtures only. Do not use real customer records, live c
 
 - Isolated test configuration with synthetic data.
 - Test identity/session provider or a controlled test double that produces trusted identity context.
-- Test instances or controlled doubles for the Agent API, MCP server, and Banking API/service boundary.
+- Test instances or controlled doubles for the Agent API, agent tool runtime, and Banking API/service boundary.
 - Disposable PostgreSQL database/schema for integration tests where database behavior is under test.
 - Controlled confirmation clock or time provider for expiry cases.
 - Mocked or sandboxed human-handoff destination.
@@ -112,12 +112,12 @@ Do not record passwords, access tokens, verification codes, or unnecessary raw c
 - **Expected:** Unknown tools and invalid requests are rejected before protected operations execute. Unexpected identity or permission fields cannot alter authority.
 - **Evidence:** Validation errors and assertion of no downstream side effects.
 
-### ST-07 — MCP and Banking API authorization layers
+### ST-07 — agent tool and Banking API authorization layers
 
 - **Threats:** TM-05
-- **Preconditions:** Test MCP server and Banking API/service are available.
-- **Steps:** Attempt calls without valid MCP caller authorization; then attempt direct Banking API calls without the required trusted identity/permissions; inspect the MCP implementation for any direct database access path.
-- **Expected:** Unauthorized calls are denied at the relevant boundary; Banking API/service independently checks ownership and business rules; MCP tool code does not query banking tables directly.
+- **Preconditions:** Test agent tool runtime and Banking API/service are available.
+- **Steps:** Attempt agent calls without a valid bearer token; then attempt direct Banking API calls without required trusted identity/permissions; inspect agent tool implementations for any direct database access path.
+- **Expected:** Unauthorized calls are denied at the relevant boundary; Banking API/service independently checks ownership and business rules; agent tool code does not query banking tables directly.
 - **Evidence:** Integration test results, call traces, and code-review finding for database access boundaries.
 
 ### ST-08 — Confirmation cannot execute before approval
@@ -255,7 +255,7 @@ Security acceptance requires all critical identity, authorization, confirmation,
 - `docs/adr/ADR-008-agent-execution-and-confirmation-lifecycle.md`
 - `docs/api/agent-interface.md`
 - `docs/api/banking-api-contract.md`
-- `docs/api/mcp-tool-contracts.md`
+- `docs/api/agent-tool-contracts.md`
 - `tests/security/`
 - `evaluation/datasets/safety_cases/`
 - `evaluation/regression/`

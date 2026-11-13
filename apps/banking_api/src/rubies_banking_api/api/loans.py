@@ -1,6 +1,7 @@
+
 """HTTP endpoints for read-only loan enquiries."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -15,6 +16,9 @@ from sqlalchemy.orm import Session
 
 from rubies_banking_api.api.dependencies import get_customer_identity
 from rubies_banking_api.db.database import get_db
+from rubies_banking_api.models.loan import Loan
+from rubies_banking_api.models.loan_application import LoanApplication
+from rubies_banking_api.models.repayment import Repayment
 from rubies_banking_api.repositories.customer_repository import (
     CustomerRepository,
 )
@@ -37,6 +41,8 @@ class LoanStatusResponse(BaseModel):
     currency: str
     term_months: int
     disbursed_at: datetime
+    next_repayment_date: date | None
+    next_repayment_amount: Decimal | None
 
 
 class LoanApplicationStatusResponse(BaseModel):
@@ -49,6 +55,13 @@ class LoanApplicationStatusResponse(BaseModel):
     purpose: str
     applied_at: datetime
     created_at: datetime
+
+
+class CustomerLoanOverviewResponse(BaseModel):
+    """Combined loan and application information for a customer."""
+
+    loans: list[LoanStatusResponse]
+    applications: list[LoanApplicationStatusResponse]
 
 
 def _build_service(db: Session) -> LoanEnquiryService:
@@ -74,6 +87,99 @@ def _map_customer_error(exc: CustomerMismatchError) -> HTTPException:
     )
 
 
+def _get_next_repayment(loan: Loan) -> Repayment | None:
+    """Return the earliest unpaid repayment for a loan."""
+    outstanding_repayments = [
+        repayment
+        for repayment in loan.repayments
+        if repayment.status in {"PENDING", "OVERDUE"}
+    ]
+
+    if not outstanding_repayments:
+        return None
+
+    return min(
+        outstanding_repayments,
+        key=lambda repayment: (
+            repayment.due_date,
+            repayment.installment_number,
+        ),
+    )
+
+
+def _build_loan_status_response(loan: Loan) -> LoanStatusResponse:
+    """Build a loan response including its next scheduled repayment."""
+    next_repayment = _get_next_repayment(loan)
+
+    return LoanStatusResponse(
+        loan_reference=loan.loan_reference,
+        status=loan.status,
+        principal=loan.principal,
+        outstanding_balance=loan.outstanding_balance,
+        currency=loan.currency,
+        term_months=loan.term_months,
+        disbursed_at=loan.disbursed_at,
+        next_repayment_date=(
+            next_repayment.due_date if next_repayment else None
+        ),
+        next_repayment_amount=(
+            next_repayment.principal_due if next_repayment else None
+        ),
+    )
+
+
+def _build_application_status_response(
+    application: LoanApplication,
+) -> LoanApplicationStatusResponse:
+    """Build a safe loan application response."""
+    return LoanApplicationStatusResponse(
+        application_reference=application.application_reference,
+        status=application.status,
+        requested_amount=application.requested_amount,
+        currency=application.currency,
+        purpose=application.purpose,
+        applied_at=application.applied_at,
+        created_at=application.created_at,
+    )
+
+
+@router.get(
+    "/api/loans/status",
+    response_model=CustomerLoanOverviewResponse,
+)
+def get_customer_loan_status(
+    db: Annotated[Session, Depends(get_db)],
+    identity: Annotated[
+        CustomerIdentity,
+        Depends(get_customer_identity),
+    ],
+) -> CustomerLoanOverviewResponse:
+    """
+    Return all loans and loan applications for the authenticated customer.
+    """
+    service = _build_service(db)
+
+    try:
+        loans, applications = service.get_customer_loan_overview(identity)
+
+        return CustomerLoanOverviewResponse(
+            loans=[
+                _build_loan_status_response(loan)
+                for loan in loans
+            ],
+            applications=[
+                _build_application_status_response(application)
+                for application in applications
+            ],
+        )
+
+    except IdentityVerificationError as exc:
+        raise _map_identity_error(exc) from exc
+
+    except CustomerMismatchError as exc:
+        raise _map_customer_error(exc) from exc
+
+
 @router.get(
     "/api/loans/{loan_reference}/status",
     response_model=LoanStatusResponse,
@@ -95,19 +201,14 @@ def get_loan_status(
             loan_reference=loan_reference,
         )
 
-        return LoanStatusResponse(
-            loan_reference=loan.loan_reference,
-            status=loan.status,
-            principal=loan.principal,
-            outstanding_balance=loan.outstanding_balance,
-            currency=loan.currency,
-            term_months=loan.term_months,
-            disbursed_at=loan.disbursed_at,
-        )
+        return _build_loan_status_response(loan)
+
     except IdentityVerificationError as exc:
         raise _map_identity_error(exc) from exc
+
     except CustomerMismatchError as exc:
         raise _map_customer_error(exc) from exc
+
     except ValueError as exc:
         raise HTTPException(
             status_code=404,
@@ -136,19 +237,14 @@ def get_loan_application_status(
             application_reference=application_reference,
         )
 
-        return LoanApplicationStatusResponse(
-            application_reference=application.application_reference,
-            status=application.status,
-            requested_amount=application.requested_amount,
-            currency=application.currency,
-            purpose=application.purpose,
-            applied_at=application.applied_at,
-            created_at=application.created_at,
-        )
+        return _build_application_status_response(application)
+
     except IdentityVerificationError as exc:
         raise _map_identity_error(exc) from exc
+
     except CustomerMismatchError as exc:
         raise _map_customer_error(exc) from exc
+
     except ValueError as exc:
         raise HTTPException(
             status_code=404,

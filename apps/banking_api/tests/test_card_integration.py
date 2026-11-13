@@ -331,3 +331,14 @@ def test_postgres_rolls_back_card_and_confirmation_on_audit_failure(workflow):
         .where(AuditLog.correlation_id == workflow["correlation_id"])
     )
     assert audit_count == 0
+
+
+def test_lists_only_authenticated_customers_cards(workflow):
+    cards = workflow["card_service"].list_customer_cards(
+        workflow["identity"]
+    )
+
+    assert len(cards) == 1
+    assert cards[0].card_reference == workflow["card"].card_reference
+    assert cards[0].masked_number == "**** **** **** 1234"
+    assert cards[0].status == "ACTIVE"

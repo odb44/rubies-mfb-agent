@@ -12,7 +12,5 @@ class CustomerRepository:
 
     def get_by_reference(self, customer_reference: str) -> Customer | None:
         """Find a customer by their unique banking reference."""
-        statement = select(Customer).where(
-            Customer.customer_reference == customer_reference
-        )
+        statement = select(Customer).where(Customer.customer_reference == customer_reference)
         return self.db.scalar(statement)

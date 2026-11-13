@@ -1,21 +1,26 @@
+
 """Persistent records for customer support handoffs."""
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
-    JSON,
     String,
     Text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from rubies_banking_api.db.base import Base
+
+if TYPE_CHECKING:
+    from rubies_banking_api.models.customer import Customer
 
 
 class HandoffStatus(StrEnum):
@@ -83,6 +88,8 @@ class SupportHandoff(Base):
         nullable=False,
         index=True,
     )
+
+    customer: Mapped["Customer"] = relationship()
 
     status: Mapped[str] = mapped_column(
         String(32),

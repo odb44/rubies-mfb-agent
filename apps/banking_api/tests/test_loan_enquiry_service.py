@@ -3,7 +3,6 @@
 from unittest.mock import Mock
 
 import pytest
-
 from rubies_banking_api.models.customer import Customer
 from rubies_banking_api.services.loan_enquiry_service import (
     LoanEnquiryService,

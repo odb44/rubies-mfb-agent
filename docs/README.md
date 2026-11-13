@@ -1,6 +1,6 @@
 # Rubies MFB Customer Support Agent — Documentation Index
 
-**Design status:** The design drafts listed here have been approved by the project owner. “Accepted” records a design decision or approval; it does not claim that the corresponding implementation or tests are complete.
+**Documentation status:** The architecture and design decisions listed here are the approved project baseline. Implementation and test status are reported separately.
 
 ## Architecture
 
@@ -22,17 +22,18 @@
 - [ADR-002 — PostgreSQL persistence](adr/ADR-002-postgresql-persistence.md)
 - [ADR-003 — Local vector index](adr/ADR-003-local-vector-index.md)
 - [ADR-004 — Local model artifacts](adr/ADR-004-local-model-artifacts.md)
-- [ADR-006 — MCP and authorization](adr/ADR-006-mcp-and-authorization.md)
+- [ADR-006 — Historical MCP authorization decision (superseded)](adr/ADR-006-mcp-and-authorization.md)
 - [ADR-007 — Observability and evaluation](adr/ADR-007-observability-and-evaluation.md)
 - [ADR-008 — Agent execution and confirmation lifecycle](adr/ADR-008-agent-execution-and-confirmation-lifecycle.md)
+- [ADR-009 — Direct agent tool execution](adr/ADR-009-direct-agent-tool-execution.md)
 
 **ADR-005 — Fleet adapter** is intentionally deferred until Fleet integration requirements are confirmed. Its absence is deliberate, not an overlooked accepted decision.
 
-## Agent and banking API contracts
+## Agent and Banking API contracts
 
 - [Agent interface](api/agent-interface.md)
 - [Banking API contract](api/banking-api-contract.md)
-- [MCP tool contracts](api/mcp-tool-contracts.md)
+- [Agent tool contracts](api/agent-tool-contracts.md)
 
 ## Operational and user flows
 
@@ -43,7 +44,6 @@
 - [Confirmation and execution](flows/confirmation-and-execution-flow.mmd)
 - [Dispute and confirmation](flows/dispute-and-confirmation-flow.mmd)
 - [RAG retrieval](flows/rag-retrieval-flow.mmd)
-- [Loan eligibility](flows/loan-eligibility-flow.mmd)
 - [Human handoff](flows/human-handoff-flow.mmd)
 
 ## Design guardrails

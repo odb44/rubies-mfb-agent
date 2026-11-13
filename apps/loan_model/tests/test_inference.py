@@ -1,4 +1,3 @@
-
 import pytest
 from rubies_loan_model.inference import LoanModelInference
 from rubies_loan_model.schemas import LoanApplicantInput
@@ -29,9 +28,7 @@ def test_engineered_features_are_calculated(applicant: LoanApplicantInput) -> No
 
 
 def test_invalid_loan_amount_is_rejected(applicant: LoanApplicantInput) -> None:
-    invalid_applicant = LoanApplicantInput(
-        **{**applicant.__dict__, "LoanAmount": 0}
-    )
+    invalid_applicant = LoanApplicantInput(**{**applicant.__dict__, "LoanAmount": 0})
 
     with pytest.raises(ValueError, match="LoanAmount"):
         invalid_applicant.to_model_features()
@@ -48,8 +45,7 @@ def test_model_loads_and_returns_prediction(
     assert result.predicted_historical_status in {"Y", "N"}
     assert 0 <= result.probability_historical_yes <= 1
     assert 0 <= result.probability_historical_no <= 1
-    assert (
-        result.probability_historical_yes
-        + result.probability_historical_no
-    ) == pytest.approx(1.0)
+    assert (result.probability_historical_yes + result.probability_historical_no) == pytest.approx(
+        1.0
+    )
     assert result.lending_decision == "NOT_DETERMINED"

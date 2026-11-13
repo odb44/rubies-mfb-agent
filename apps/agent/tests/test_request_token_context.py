@@ -3,8 +3,7 @@
 import asyncio
 
 import pytest
-
-from rubies_agent.runtime import (
+from rubies_agent.request_context import (
     _get_request_access_token,
     reset_request_access_token,
     set_request_access_token,
@@ -12,7 +11,7 @@ from rubies_agent.runtime import (
 
 
 def test_missing_request_token_fails_closed() -> None:
-    """Banking operations must not proceed without a request token."""
+    """Direct Banking API calls must not proceed without a request token."""
     with pytest.raises(
         RuntimeError,
         match="authenticated customer access token is required",

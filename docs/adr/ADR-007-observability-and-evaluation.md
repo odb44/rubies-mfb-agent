@@ -12,7 +12,7 @@ The project therefore needs a consistent way to understand what happened during 
 
 ## Decision
 
-Use the shared `packages/observability/` boundary for reusable logging, metrics, tracing, and instrumentation conventions. Apply those conventions across the agent, banking API, MCP server, knowledge-base pipeline, and loan-model components where relevant.
+Use the shared `packages/observability/` boundary for reusable logging, metrics, tracing, and instrumentation conventions. Apply those conventions across the agent, banking API, agent tool runtime, knowledge-base pipeline, and loan-model components where relevant.
 
 Maintain automated evaluation assets under the locked `evaluation/` structure and tests under `tests/`. Evaluation must cover retrieval quality, tool behavior, safety controls, and end-to-end customer-support scenarios. The system must not rely on informal manual testing alone for regression detection.
 
@@ -28,7 +28,7 @@ Sensitive values must be excluded or redacted. Do not log passwords, authenticat
 
 ### Correlation and tracing
 
-Requests should carry a correlation identifier across the agent, tool router, MCP boundary, banking API, and relevant downstream operations. Where distributed tracing is used, spans should make the sequence and duration of significant operations visible without recording sensitive payloads.
+Requests should carry a correlation identifier across the agent, tool router, agent tool boundary, banking API, and relevant downstream operations. Where distributed tracing is used, spans should make the sequence and duration of significant operations visible without recording sensitive payloads.
 
 A trace should help answer questions such as:
 

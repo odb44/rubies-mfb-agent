@@ -4,6 +4,7 @@ The loader validates each dataset row against its JSON Schema and returns
 normalised records with stable source locations. It deliberately does not
 execute scenarios or score model responses.
 """
+
 from __future__ import annotations
 
 import json
@@ -126,17 +127,25 @@ def load_jsonl_dataset(
             try:
                 item = json.loads(raw_line)
             except json.JSONDecodeError as exc:
-                issues.append(DatasetIssue(
-                    str(data_path), line_number, "INVALID_JSON",
-                    f"Invalid JSON at column {exc.colno}: {exc.msg}",
-                ))
+                issues.append(
+                    DatasetIssue(
+                        str(data_path),
+                        line_number,
+                        "INVALID_JSON",
+                        f"Invalid JSON at column {exc.colno}: {exc.msg}",
+                    )
+                )
                 continue
 
             if not isinstance(item, dict):
-                issues.append(DatasetIssue(
-                    str(data_path), line_number, "ROW_NOT_OBJECT",
-                    "Each JSONL record must be a JSON object.",
-                ))
+                issues.append(
+                    DatasetIssue(
+                        str(data_path),
+                        line_number,
+                        "ROW_NOT_OBJECT",
+                        "Each JSONL record must be a JSON object.",
+                    )
+                )
                 continue
 
             errors = sorted(
@@ -146,19 +155,27 @@ def load_jsonl_dataset(
             if errors:
                 for error in errors:
                     location = ".".join(str(part) for part in error.absolute_path) or "$"
-                    issues.append(DatasetIssue(
-                        str(data_path), line_number, "SCHEMA_VALIDATION",
-                        f"{location}: {error.message}",
-                    ))
+                    issues.append(
+                        DatasetIssue(
+                            str(data_path),
+                            line_number,
+                            "SCHEMA_VALIDATION",
+                            f"{location}: {error.message}",
+                        )
+                    )
                 continue
 
             case_id = item.get("id")
             if isinstance(case_id, str):
                 if case_id in seen_ids:
-                    issues.append(DatasetIssue(
-                        str(data_path), line_number, "DUPLICATE_ID",
-                        f"Duplicate id {case_id!r}; first seen on line {seen_ids[case_id]}.",
-                    ))
+                    issues.append(
+                        DatasetIssue(
+                            str(data_path),
+                            line_number,
+                            "DUPLICATE_ID",
+                            f"Duplicate id {case_id!r}; first seen on line {seen_ids[case_id]}.",
+                        )
+                    )
                     continue
                 seen_ids[case_id] = line_number
 
@@ -172,7 +189,9 @@ def load_jsonl_dataset(
         issues=tuple(issues),
     )
     if issues and fail_on_invalid:
-        summary = f"{data_path} contains {len(issues)} validation issue(s); refusing partial dataset."
+        summary = (
+            f"{data_path} contains {len(issues)} validation issue(s); refusing partial dataset."
+        )
         raise DatasetLoadError(summary, issues)
     return result
 
@@ -201,14 +220,11 @@ def load_evaluation_datasets(
         except DatasetLoadError as exc:
             failures.extend(exc.issues)
             if not exc.issues:
-                failures.append(DatasetIssue(
-                    str(dataset_path), 0, "LOAD_FAILURE", str(exc)
-                ))
+                failures.append(DatasetIssue(str(dataset_path), 0, "LOAD_FAILURE", str(exc)))
 
     if failures:
         details = "; ".join(
-            f"{issue.path}:{issue.line} [{issue.code}] {issue.message}"
-            for issue in failures[:10]
+            f"{issue.path}:{issue.line} [{issue.code}] {issue.message}" for issue in failures[:10]
         )
         remainder = len(failures) - min(len(failures), 10)
         suffix = f"; and {remainder} more" if remainder else ""

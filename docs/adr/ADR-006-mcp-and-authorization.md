@@ -1,8 +1,10 @@
 # ADR-006: MCP and Authorization
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-009
 - **Decision date:** 2026-10-24
 - **Scope:** MCP tool exposure and authorization boundaries
+
+> **Status note (2026-10-31):** This ADR records the original MCP-based design. Its runtime-topology decision is superseded by [ADR-009: Direct Agent Tool Execution](ADR-009-direct-agent-tool-execution.md). The Banking API authorization, ownership, confirmation, and persistence requirements remain in force.
 
 ## Context
 

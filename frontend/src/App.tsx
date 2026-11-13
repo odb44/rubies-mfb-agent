@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import "./App.css";
+import SupportDesk from "./SupportDesk";
 
 type View = "customer" | "support" | "observability";
 type ObservabilityTab = "single-turn" | "cumulative";
@@ -66,6 +69,14 @@ type ObservabilitySummary = {
     averageLatencyMs?: number | null;
     maxLatencyMs?: number | null;
     averageTtfbMs?: number | null;
+    turns?: number;
+    costedTurns?: number;
+    costAvailable?: boolean;
+    pricingConfigured?: boolean;
+    pricingModel?: string | null;
+    totalModelCostUsd?: number | null;
+    lastCostPerTurnUsd?: number | null;
+    averageCostPerTurnUsd?: number | null;
   };
 };
 
@@ -83,8 +94,11 @@ type DemoScenario = {
   message: string;
 };
 
-const API_URL = "http://127.0.0.1:8000";
-const AGENT_URL = "http://127.0.0.1:8001";
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+const AGENT_URL =
+  import.meta.env.VITE_AGENT_URL || "http://127.0.0.1:8001";
 
 const DEMO_PROFILES: DemoProfile[] = [
   {
@@ -173,6 +187,15 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   },
 ];
 
+type ChatSession = {
+  id: string;
+  title: string;
+  status: "ACTIVE" | "ARCHIVED";
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
+};
+
 function App() {
   const [view, setView] = useState<View>("customer");
   const [observability, setObservability] =
@@ -182,6 +205,9 @@ function App() {
   const [observabilityTab, setObservabilityTab] = useState<ObservabilityTab>("single-turn");
   const [turnTraces, setTurnTraces] = useState<TurnTrace[]>([]);
   const [selectedTurnId, setSelectedTurnId] = useState<string | null>(null);
+  const [chats, setChats] = useState<ChatSession[]>([]);
+  const [chatsLoading, setChatsLoading] = useState(false);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -236,6 +262,67 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, loading]);
+
+  async function loadChats(accessToken: string) {
+    setChatsLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/customer/chats`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Unable to load chat history (${response.status}).`);
+      }
+
+      const data = await response.json();
+      setChats(data.items ?? []);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Unable to load chat history."
+      );
+      setChats([]);
+    } finally {
+      setChatsLoading(false);
+    }
+  }
+
+  async function startNewChat() {
+    if (loading) return;
+    setActiveChatId(null);
+    threadIdRef.current = crypto.randomUUID();
+    setMessages(INITIAL_MESSAGES);
+    setMessage("");
+    setError("");
+  }
+
+  async function openChat(chatId: string) {
+    if (!token || loading) return;
+    setChatsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`${API_URL}/api/customer/chats/${chatId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        throw new Error(`Unable to open conversation (${response.status}).`);
+      }
+      const data = await response.json();
+      setActiveChatId(data.id);
+      threadIdRef.current = data.id;
+      setMessages((data.messages ?? []).map((item: { role: string; content: string }) => ({
+        sender: item.role === "USER" ? "customer" : "agent",
+        text: item.content,
+      })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open conversation.");
+    } finally {
+      setChatsLoading(false);
+    }
+  }
 
   function selectDemoProfile(profile: DemoProfile) {
     if (loading || otpRequested || authenticated) {
@@ -336,7 +423,7 @@ function App() {
       setDevelopmentOtp("");
       setOtp("");
       threadIdRef.current = crypto.randomUUID();
-
+      await loadChats(data.access_token);
       setMessages([
         {
           sender: "agent",
@@ -365,17 +452,55 @@ function App() {
       return;
     }
 
-    setMessages((current) => [
-      ...current,
-      {
-        sender: "customer",
-        text,
-      },
-    ]);
-
     setMessage("");
     setLoading(true);
     setError("");
+
+    // Persist the customer message before invoking the agent. The first
+    // message creates the conversation; later messages append to it.
+    let chatId = activeChatId;
+    const priorMessages = activeChatId ? messages : [];
+
+    try {
+      if (!chatId) {
+        const createResponse = await fetch(`${API_URL}/api/customer/chats`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ content: text }),
+        });
+        if (!createResponse.ok) {
+          const data = await createResponse.json().catch(() => ({}));
+          throw new Error(data.detail || `Unable to save your message (${createResponse.status}).`);
+        }
+        const created = await createResponse.json();
+        chatId = created.id;
+        setActiveChatId(chatId);
+        threadIdRef.current = chatId;
+      } else {
+        const saveResponse = await fetch(`${API_URL}/api/customer/chats/${chatId}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ content: text }),
+        });
+        if (!saveResponse.ok) {
+          const data = await saveResponse.json().catch(() => ({}));
+          throw new Error(data.detail || `Unable to save your message (${saveResponse.status}).`);
+        }
+      }
+
+      setMessages([...priorMessages, { sender: "customer", text }]);
+      void loadChats(token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save your message.");
+      setLoading(false);
+      return;
+    }
 
     const turnStartedAt = performance.now();
     const runId = crypto.randomUUID();
@@ -399,7 +524,7 @@ function App() {
           threadId: threadIdRef.current,
           runId,
           messages: [
-            ...messages.map((item, index) => ({
+            ...priorMessages.map((item, index) => ({
               id: `${threadIdRef.current}-message-${index}`,
               role: item.sender === "customer" ? "user" : "assistant",
               content: item.text,
@@ -471,34 +596,54 @@ function App() {
         function extractText(
           payload: Record<string, unknown>
         ): string {
-          const delta = payload.delta;
-
-          // Common AG-UI text delta format.
-          if (typeof delta === "string") {
-            return delta;
-          }
-
-          // Alternative delta object format.
-          if (
-            delta !== null &&
-            typeof delta === "object" &&
-            "content" in delta &&
-            typeof delta.content === "string"
-          ) {
-            return delta.content;
-          }
-
-          // Some integrations expose text under explicit fields.
+          // Only render explicit assistant text-content events. Other AG-UI
+          // events may contain tool arguments, tool results, state, or metadata.
           const eventType =
             typeof payload.type === "string"
               ? payload.type.toUpperCase()
               : "";
 
-          if (eventType.includes("TEXT_MESSAGE_CONTENT")) {
+          if (
+            eventType === "TEXT_MESSAGE_CONTENT" ||
+            eventType.endsWith(".TEXT_MESSAGE_CONTENT")
+          ) {
+            const delta = payload.delta;
+
+            if (typeof delta === "string") {
+              return delta;
+            }
+
+            if (
+              delta !== null &&
+              typeof delta === "object" &&
+              "content" in delta &&
+              typeof delta.content === "string"
+            ) {
+              return delta.content;
+            }
+
             for (const key of ["content", "text"]) {
               if (typeof payload[key] === "string") {
                 return payload[key] as string;
               }
+            }
+          }
+          // Support the nested Bedrock text-delta shape only when the event
+          // explicitly identifies itself as a content-block delta.
+          const contentBlockDelta = payload.contentBlockDelta;
+          if (
+            contentBlockDelta !== null &&
+            typeof contentBlockDelta === "object" &&
+            "delta" in contentBlockDelta
+          ) {
+            const delta = contentBlockDelta.delta;
+            if (
+              delta !== null &&
+              typeof delta === "object" &&
+              "text" in delta &&
+              typeof delta.text === "string"
+            ) {
+              return delta.text;
             }
           }
 
@@ -610,7 +755,7 @@ function App() {
       setTurnTraces((current) => [{
         id: traceId, runId, threadId: threadIdRef.current, prompt: text, response: observedResponse,
         startedAt: turnStartedIso, durationMs: Math.round(performance.now() - turnStartedAt),
-        firstTokenMs, status: "error", error: message, events: traceEvents,
+        firstTokenMs, status: "error" as const, error: message, events: traceEvents,
       }, ...current].slice(0, 30));
       setSelectedTurnId(traceId);
     } finally {
@@ -619,11 +764,13 @@ function App() {
         traceEvents.push({ label: "Turn completed", atMs: durationMs, status: "complete" });
         setTurnTraces((current) => [{
           id: traceId, runId, threadId: threadIdRef.current, prompt: text, response: observedResponse,
-          startedAt: turnStartedIso, durationMs, firstTokenMs, status: "success", events: traceEvents,
+          startedAt: turnStartedIso, durationMs, firstTokenMs, status: "success" as const, events: traceEvents,
         }, ...current].slice(0, 30));
         setSelectedTurnId(traceId);
       }
       setLoading(false);
+      // Refresh process-wide model telemetry after every completed turn.
+      void loadObservability();
     }
   }
   function logout() {
@@ -638,6 +785,8 @@ function App() {
     setMessage("");
 
     setMessages(INITIAL_MESSAGES);
+    setChats([]);
+    setActiveChatId(null);
     threadIdRef.current = crypto.randomUUID();
     setView("customer");
   }
@@ -982,6 +1131,38 @@ function App() {
               </div>
             ) : (
               <div className="chat-layout">
+                <aside className="chat-history-card">
+                  <div className="chat-history-heading">
+                    <div>
+                      <span className="eyebrow">YOUR CONVERSATIONS</span>
+                      <h3>Chat history</h3>
+                    </div>
+                    <button type="button" className="new-chat-button" onClick={() => void startNewChat()} disabled={loading}>
+                      + New chat
+                    </button>
+                  </div>
+                  {chatsLoading ? (
+                    <p className="chat-history-empty">Loading conversations...</p>
+                  ) : chats.length === 0 ? (
+                    <p className="chat-history-empty">Your previous conversations will appear here.</p>
+                  ) : (
+                    <div className="chat-history-list">
+                      {chats.map((chat) => (
+                        <button
+                          type="button"
+                          key={chat.id}
+                          className={`chat-history-item ${activeChatId === chat.id ? "active" : ""}`}
+                          onClick={() => void openChat(chat.id)}
+                          disabled={loading}
+                        >
+                          <span className="chat-history-item-title">{chat.title || "New conversation"}</span>
+                          <span className="chat-history-item-date">{new Date(chat.last_message_at).toLocaleDateString()}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </aside>
+
                 <div className="chat-card">
                   <div className="chat-header">
                     <div className="assistant-avatar">R</div>
@@ -1095,7 +1276,11 @@ function App() {
                               : "You"}
                           </span>
 
-                          <p>{item.text}</p>
+                          <div className="message-markdown">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {item.text}
+                            </ReactMarkdown>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1222,78 +1407,7 @@ function App() {
             )}
           </div>
         ) : view === "support" ? (
-          <div className="content support-content">
-            <div className="page-heading">
-              <div>
-                <span className="eyebrow">OPERATIONS</span>
-
-                <h2>Customer support desk</h2>
-
-                <p>
-                  A workspace for human representatives to
-                  manage escalated customer conversations.
-                </p>
-              </div>
-            </div>
-
-            <div className="support-notice">
-              <div className="notice-icon">i</div>
-
-              <div>
-                <strong>
-                  Support desk interface — next integration step
-                </strong>
-
-                <p>
-                  The layout is ready, but live handoff queues
-                  and agent replies still need to be connected
-                  to the Banking API support-handoff endpoints.
-                  This view does not yet display real customer
-                  cases.
-                </p>
-              </div>
-            </div>
-
-            <div className="support-stats">
-              <div className="stat-card">
-                <span>OPEN CASES</span>
-                <strong>—</strong>
-                <small>Awaiting queue connection</small>
-              </div>
-
-              <div className="stat-card">
-                <span>IN PROGRESS</span>
-                <strong>—</strong>
-                <small>Awaiting queue connection</small>
-              </div>
-
-              <div className="stat-card">
-                <span>RESOLVED TODAY</span>
-                <strong>—</strong>
-                <small>Awaiting queue connection</small>
-              </div>
-            </div>
-
-            <div className="empty-support">
-              <div className="empty-icon">▤</div>
-
-              <h3>Your support queue will appear here</h3>
-
-              <p>
-                We'll connect this screen to the existing
-                support-handoff lifecycle so representatives can
-                review case summaries, respond, and resolve
-                conversations.
-              </p>
-
-              <button
-                className="secondary-button"
-                onClick={() => setView("customer")}
-              >
-                Return to customer experience
-              </button>
-            </div>
-          </div>
+          <SupportDesk apiUrl={API_URL} />
         ) : (
           <div className="content observability-content">
             <div className="page-heading observability-heading">
@@ -1338,7 +1452,7 @@ function App() {
                       <div className="turn-section"><h4>Turn timeline <span>Browser-observed</span></h4><div className="turn-timeline">{trace.events.map((event, index) => <div className="timeline-row" key={`${event.label}-${index}`}><span className={`timeline-marker ${event.status}`} /><div className="timeline-copy"><strong>{event.label}</strong><small>{event.atMs.toLocaleString()} ms from submit</small></div></div>)}</div></div>
                       <div className="turn-section"><h4>Customer message</h4><div className="turn-message customer-turn-message">{trace.prompt}</div></div>
                       <div className="turn-section"><h4>Assistant response</h4><div className="turn-message">{trace.response || trace.error || "No response text was captured."}</div></div>
-                      <div className="trace-notice"><strong>Trace coverage</strong><p>This view records the browser-observed request lifecycle. Backend model spans, MCP tool calls, and banking API events are not yet queryable per run; they should be joined by correlation/run ID when the event-query endpoint is added.</p></div>
+                      <div className="trace-notice"><strong>Trace coverage</strong><p>This view records the browser-observed request lifecycle. Backend model spans, agent tool calls, and banking API events are not yet queryable per run; they should be joined by correlation/run ID when the event-query endpoint is added.</p></div>
                     </>;
                   })()}
                 </section>
@@ -1364,7 +1478,8 @@ function App() {
                     <div className="usage-stat-grid"><div className="usage-stat"><span>Model calls</span><strong>{calls.toLocaleString()}</strong><small>{(usage.successfulCalls ?? 0).toLocaleString()} successful · {(usage.failedCalls ?? 0).toLocaleString()} failed</small></div><div className="usage-stat"><span>Input tokens</span><strong>{input.toLocaleString()}</strong><small>Prompt + context</small></div><div className="usage-stat"><span>Output tokens</span><strong>{output.toLocaleString()}</strong><small>Generated response</small></div></div>
                     <div className="usage-breakdown"><div className="usage-breakdown-heading"><div><h4>Token distribution</h4><p>Input versus generated output</p></div><strong>{total.toLocaleString()} total</strong></div><div className="token-stacked-bar"><span style={{width: `${inputShare}%`}} /><span style={{width: `${100 - inputShare}%`}} /></div><div className="token-legend"><span><i className="token-dot input-dot" />Input <strong>{inputShare}%</strong></span><span><i className="token-dot output-dot" />Output <strong>{100 - inputShare}%</strong></span></div>{usage.cacheReadInputTokens != null || usage.cacheWriteInputTokens != null ? <div className="cache-metrics"><div><span>Cache-read input</span><strong>{(usage.cacheReadInputTokens ?? 0).toLocaleString()}</strong></div><div><span>Cache-write input</span><strong>{(usage.cacheWriteInputTokens ?? 0).toLocaleString()}</strong></div></div> : null}</div>
                     <div className="usage-latency-grid"><div><span>Average latency</span><strong>{usage.averageLatencyMs == null ? "—" : `${usage.averageLatencyMs.toLocaleString()} ms`}</strong><small>Across model calls</small></div><div><span>Maximum latency</span><strong>{usage.maxLatencyMs == null ? "—" : `${usage.maxLatencyMs.toLocaleString()} ms`}</strong><small>Slowest recorded call</small></div><div><span>Time to first byte</span><strong>{usage.averageTtfbMs == null ? "—" : `${usage.averageTtfbMs.toLocaleString()} ms`}</strong><small>Average initial response delay</small></div></div>
-                    <div className="model-usage-footnote"><span>ⓘ</span><p>Usage and timings come from recorded provider metadata. Cost is not shown because reliable pricing metadata is not currently available.</p></div>
+                    <div className="usage-cost-section"><div className="usage-breakdown-heading"><div><h4>Model cost</h4><p>{usage.pricingModel ? `Pricing profile: ${usage.pricingModel}` : "Provider pricing configuration"}</p></div><span className={`cost-status ${usage.costAvailable ? "configured" : "not-configured"}`}>{usage.costAvailable ? "Cost available" : "Pricing not configured"}</span></div><div className="usage-cost-grid"><div><span>Total model cost</span><strong>{usage.costAvailable && usage.totalModelCostUsd != null ? `$${usage.totalModelCostUsd.toFixed(6)}` : "Not available"}</strong><small>{(usage.costedTurns ?? 0).toLocaleString()} of {(usage.turns ?? 0).toLocaleString()} turns costed</small></div><div><span>Average cost / turn</span><strong>{usage.costAvailable && usage.averageCostPerTurnUsd != null ? `$${usage.averageCostPerTurnUsd.toFixed(6)}` : "—"}</strong><small>Across costed turns</small></div><div><span>Last turn cost</span><strong>{usage.costAvailable && usage.lastCostPerTurnUsd != null ? `$${usage.lastCostPerTurnUsd.toFixed(6)}` : "—"}</strong><small>Most recently recorded turn</small></div></div></div>
+                    <div className="model-usage-footnote"><span>ⓘ</span><p>{usage.costAvailable ? "Costs are estimates calculated from configured per-token provider rates." : "Token usage and latency are being captured. Cost estimates will appear after valid input, output and cache pricing rates are configured for this model; no cost is inferred while pricing is unavailable."}</p></div>
                   </div>; })() : <div className="model-usage-empty"><span className="empty-icon">◷</span><strong>Model telemetry is not available yet</strong><p>{observability?.modelUsage?.reason ?? "Make a model request, then refresh cumulative metrics."}</p></div>}
                 </section>
               </>

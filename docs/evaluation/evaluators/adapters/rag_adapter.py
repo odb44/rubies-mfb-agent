@@ -9,6 +9,7 @@ abstention, language matching, and safety parity. Semantic correctness is
 intentionally represented as an explicit assessment input rather than guessed
 from string similarity.
 """
+
 from __future__ import annotations
 
 import re
@@ -38,7 +39,7 @@ class RAGObservation:
     # Human/judge assessment, if available. Must be explicit; never inferred
     # solely from string overlap by this adapter.
     correctness_score: int | None = None  # 0 incorrect, 1 partial, 2 correct
-    grounding_score: int | None = None    # 0 unsupported, 1 partially supported, 2 supported
+    grounding_score: int | None = None  # 0 unsupported, 1 partially supported, 2 supported
     abstention_expected: bool | None = None
     abstention_observed: bool | None = None
     language_observed: str | None = None  # "en" or "pcm"
@@ -141,7 +142,9 @@ def _is_abstention_case(case: Mapping[str, Any]) -> bool:
     explicit = case.get("abstention_expected")
     if isinstance(explicit, bool):
         return explicit
-    case_type = str(_first_nonempty(case, ("case_type", "expected_behavior", "category")) or "").lower()
+    case_type = str(
+        _first_nonempty(case, ("case_type", "expected_behavior", "category")) or ""
+    ).lower()
     if any(token in case_type for token in ("abstain", "insufficient", "conflict", "unknown")):
         return True
     return bool(case.get("must_abstain", False))
@@ -232,7 +235,9 @@ def evaluate_rag_case(
 
     citation_ids_valid = cited_sources.issubset(retrieved_sources)
     citation_sections_valid = cited_sections.issubset(retrieved_sections)
-    expected_sources_present = expected_sources.issubset(cited_sources) if expected_sources else None
+    expected_sources_present = (
+        expected_sources.issubset(cited_sources) if expected_sources else None
+    )
     citation_pass = citation_ids_valid and citation_sections_valid
     if expected_sources_present is False:
         citation_pass = False
@@ -243,7 +248,7 @@ def evaluate_rag_case(
         if observation.abstention_observed is not None
         else _contains_abstention(observation.answer, observed_language)
     )
-    abstention_pass = (abstention_observed == expected_abstention)
+    abstention_pass = abstention_observed == expected_abstention
 
     assessment = dict(assessment or {})
     correctness_score = assessment.get("correctness_score", observation.correctness_score)
@@ -271,46 +276,80 @@ def evaluate_rag_case(
             raise RAGAdapterError(f"{case_id}: {field_name} must be a boolean or None.")
 
     assertions = [
-        _assertion("RAG-CITATION-IDS-VALID", citation_ids_valid,
-                   "Every cited source must be present in the retrieved evidence."),
-        _assertion("RAG-CITATION-SECTIONS-VALID", citation_sections_valid,
-                   "Every cited section must be present in the retrieved evidence."),
-        _assertion("RAG-EXPECTED-SOURCES", expected_sources_present,
-                   "Expected source coverage is checked when the case defines expected sources."),
-        _assertion("RAG-REQUIRED-CONCEPTS", required_terms_pass,
-                   "Required concepts are checked literally; semantic equivalence requires assessment."),
-        _assertion("RAG-ABSTENTION", abstention_pass,
-                   f"Expected abstention={expected_abstention}; observed={abstention_observed}."),
-        _assertion("RAG-LANGUAGE-MATCH", language_match,
-                   "Language matching is checked when expected and observed language are known."),
-        _assertion("RAG-CONTENT-CORRECTNESS", correctness_score == 2 if correctness_score is not None else None,
-                   "Correctness requires an explicit calibrated assessment."),
-        _assertion("RAG-GROUNDING", grounding_score == 2 if grounding_score is not None else None,
-                   "Grounding requires an explicit assessment of answer against retrieved evidence."),
-        _assertion("RAG-SAFETY", safety_pass,
-                   "Safety assessment must be provided by deterministic checks or a calibrated reviewer."),
-        _assertion("RAG-HANDOFF", handoff_pass,
-                   "Handoff is checked when the case defines an expectation or assessment."),
+        _assertion(
+            "RAG-CITATION-IDS-VALID",
+            citation_ids_valid,
+            "Every cited source must be present in the retrieved evidence.",
+        ),
+        _assertion(
+            "RAG-CITATION-SECTIONS-VALID",
+            citation_sections_valid,
+            "Every cited section must be present in the retrieved evidence.",
+        ),
+        _assertion(
+            "RAG-EXPECTED-SOURCES",
+            expected_sources_present,
+            "Expected source coverage is checked when the case defines expected sources.",
+        ),
+        _assertion(
+            "RAG-REQUIRED-CONCEPTS",
+            required_terms_pass,
+            "Required concepts are checked literally; semantic equivalence requires assessment.",
+        ),
+        _assertion(
+            "RAG-ABSTENTION",
+            abstention_pass,
+            f"Expected abstention={expected_abstention}; observed={abstention_observed}.",
+        ),
+        _assertion(
+            "RAG-LANGUAGE-MATCH",
+            language_match,
+            "Language matching is checked when expected and observed language are known.",
+        ),
+        _assertion(
+            "RAG-CONTENT-CORRECTNESS",
+            correctness_score == 2 if correctness_score is not None else None,
+            "Correctness requires an explicit calibrated assessment.",
+        ),
+        _assertion(
+            "RAG-GROUNDING",
+            grounding_score == 2 if grounding_score is not None else None,
+            "Grounding requires an explicit assessment of answer against retrieved evidence.",
+        ),
+        _assertion(
+            "RAG-SAFETY",
+            safety_pass,
+            "Safety assessment must be provided by deterministic checks or a calibrated reviewer.",
+        ),
+        _assertion(
+            "RAG-HANDOFF",
+            handoff_pass,
+            "Handoff is checked when the case defines an expectation or assessment.",
+        ),
     ]
 
     critical_failures: list[dict[str, Any]] = []
     # Deterministic citation fabrication is a critical failure.
     if not citation_ids_valid or not citation_sections_valid:
-        critical_failures.append({
-            "failure_id": f"CF-{case_id}-FABRICATED-CITATION",
-            "category": "fabricated_or_unretrieved_citation",
-            "evidence_ref": None,
-            "status": "OPEN",
-            "notes": "A cited source or section was not present in retrieved evidence.",
-        })
+        critical_failures.append(
+            {
+                "failure_id": f"CF-{case_id}-FABRICATED-CITATION",
+                "category": "fabricated_or_unretrieved_citation",
+                "evidence_ref": None,
+                "status": "OPEN",
+                "notes": "A cited source or section was not present in retrieved evidence.",
+            }
+        )
     if safety_pass is False:
-        critical_failures.append({
-            "failure_id": f"CF-{case_id}-RAG-SAFETY",
-            "category": "rag_safety_failure",
-            "evidence_ref": None,
-            "status": "OPEN",
-            "notes": "The explicit safety assessment failed.",
-        })
+        critical_failures.append(
+            {
+                "failure_id": f"CF-{case_id}-RAG-SAFETY",
+                "category": "rag_safety_failure",
+                "evidence_ref": None,
+                "status": "OPEN",
+                "notes": "The explicit safety assessment failed.",
+            }
+        )
 
     content_correctness_pass = correctness_score == 2 if correctness_score is not None else None
     if critical_failures:
@@ -330,8 +369,10 @@ def evaluate_rag_case(
         content_correctness_pass is None
         or grounding_score is None
         or safety_pass is None
-        or language_match is None and expected_language is not None
-        or handoff_pass is None and isinstance(case.get("handoff_expected"), bool)
+        or language_match is None
+        and expected_language is not None
+        or handoff_pass is None
+        and isinstance(case.get("handoff_expected"), bool)
     ):
         outcome = "NEEDS_REVIEW"
     else:
@@ -341,7 +382,9 @@ def evaluate_rag_case(
         "correctness": float(correctness_score) if correctness_score is not None else None,
         "grounding": float(grounding_score) if grounding_score is not None else None,
         "citation_validity": 1.0 if citation_pass else 0.0,
-        "required_concepts": 1.0 if required_terms_pass is True else (0.0 if required_terms_pass is False else None),
+        "required_concepts": 1.0
+        if required_terms_pass is True
+        else (0.0 if required_terms_pass is False else None),
         "abstention": 1.0 if abstention_pass else 0.0,
     }
     return RAGCaseResult(

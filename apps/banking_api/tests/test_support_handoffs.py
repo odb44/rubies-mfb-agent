@@ -3,7 +3,6 @@
 from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
-
 from rubies_banking_api.api.dependencies import (
     get_customer_identity,
 )
@@ -14,7 +13,6 @@ from rubies_banking_api.models.support_handoff import (
     HandoffRoute,
     HandoffStatus,
 )
-
 
 client = TestClient(app)
 

@@ -2,7 +2,7 @@
 
 **Document ID:** RUBIES-POL-FRAUD-001  
 **Target location:** `docs/banking_policies/fraud-and-account-security-policy.md`  
-**Status:** Design draft  
+**Status:Final
 **Applies to:** Rubies MFB Customer Support Agent and its synthetic banking environment  
 **Policy owner:** Product / Banking Operations (to be assigned before implementation)  
 **Version:** 0.1  

@@ -1,15 +1,15 @@
 # Security Model
 
-- **Status:** Approved design draft
+- **Status:Final
 - **Scope:** Identity, customer isolation, verification, authorization, confirmation security, and sensitive-data handling for the Rubies MFB Customer Support Agent
-- **Related decisions:** ADR-006 (MCP and Authorization); ADR-008 (Agent Execution and Confirmation Lifecycle)
+- **Related decisions:** ADR-009 (Direct Agent Tool Execution); ADR-008; ADR-006 (historical, superseded) (Agent Execution and Confirmation Lifecycle)
 - **Implementation status:** Design only; controls described here are requirements, not evidence of implemented behavior
 
 ## 1. Purpose
 
-This document defines the security boundaries that every agent, tool, MCP, and banking operation must respect. The language model may interpret a request and propose a tool call, but it is not an identity provider, authorization authority, confirmation store, or source of banking truth.
+This document defines the security boundaries that every agent, tool, direct agent tools, and banking operation must respect. The language model may interpret a request and propose a tool call, but it is not an identity provider, authorization authority, confirmation store, or source of banking truth.
 
-The Banking API/service boundary and its persistence layer remain authoritative for banking records, customer-resource ownership, pending confirmations, and state-changing operations. MCP exposes only approved tools and must not access banking tables directly.
+The Banking API/service boundary and its persistence layer remain authoritative for banking records, customer-resource ownership, pending confirmations, and state-changing operations. Agent tools expose only approved capabilities and must not access banking tables directly.
 
 ## 2. Security principles
 
@@ -17,7 +17,7 @@ The Banking API/service boundary and its persistence layer remain authoritative 
 2. **No model-supplied authority:** A customer ID, account ID, role, verification claim, or permission appearing only in model-generated arguments is not proof of identity or authority.
 3. **Least privilege:** Allow only the tools and operations required by the authenticated principal and current context.
 4. **Resource ownership:** Check ownership or explicit delegated access for every customer-scoped resource.
-5. **Defense in depth:** Enforce relevant controls at the MCP boundary and again in the Banking API/service boundary.
+5. **Defense in depth:** Enforce relevant controls at the agent tool boundary and again in the Banking API/service boundary.
 6. **Fail closed:** If identity, authorization, verification, ownership, confirmation, or required context cannot be established, do not perform the protected operation.
 7. **Explicit consent for consequential actions:** Do not execute a confirmation-required action until the customer has explicitly approved the exact pending action.
 8. **Minimize sensitive data:** Return, prompt with, hand off, and log only the information needed for the task.
@@ -57,7 +57,7 @@ The exact factors, thresholds, expiry rules, retry limits, and lockout behavior 
 
 ## 5. Authorization and tool access
 
-The MCP server may expose only the nine initially approved tools:
+The agent tool runtime may expose only the nine initially approved tools:
 
 1. `verify_customer`
 2. `get_balance`
@@ -71,7 +71,7 @@ The MCP server may expose only the nine initially approved tools:
 
 Each tool must have a declared input schema, output schema, and permission mapping before implementation. Authorization checks must consider the trusted principal, requested tool, operation, target resource, verification state, and any action-specific requirements.
 
-The MCP layer must validate the caller and apply least-privilege checks. The Banking API/service must independently enforce resource ownership, business rules, and applicable permissions. An MCP connection alone does not establish the banking customer's identity or consent.
+The agent tool layer must validate the caller and apply least-privilege checks. The Banking API/service must independently enforce resource ownership, business rules, and applicable permissions. An agent tool call alone does not establish the banking customer's identity or consent.
 
 Unknown tools, malformed inputs, unsupported operations, and unauthorized requests must be rejected. The model must not be able to register tools dynamically, execute arbitrary code, or access PostgreSQL directly.
 
@@ -132,7 +132,7 @@ Before claiming the security design is implemented, tests must cover at least:
 - A caller cannot retrieve another customer's balance, mini-statement, transaction status, card, dispute, or loan information by changing tool arguments.
 - A model-supplied customer identifier cannot override the trusted session binding.
 - Missing or invalid identity and insufficient permissions fail closed.
-- MCP and Banking API/service boundaries both enforce the required controls.
+- agent tool and Banking API/service boundaries both enforce the required controls.
 - Unknown tools and malformed inputs are rejected.
 - A state-changing action cannot execute before explicit confirmation.
 - A confirmation cannot be reused, expired, transferred across customer/session bindings, or applied to different action details.
@@ -153,7 +153,7 @@ The following are deliberately not fixed by this design document:
 - Verification factors, step-up thresholds, retry limits, lockout rules, and expiry durations.
 - Confirmation expiry duration and idempotency-key format.
 - Audit schema, retention period, encryption/key-management details, and operational response to audit-store failure.
-- MCP SDK/version and transport, as well as Fleet integration details.
+- Agent runtime dependencies and direct HTTP client configuration.
 - The external human-support system and its authentication and delivery guarantees.
 
 These decisions must be resolved in the relevant contracts and implementation planning without weakening the approved security principles.
@@ -164,7 +164,7 @@ These decisions must be resolved in the relevant contracts and implementation pl
 - `docs/adr/ADR-008-agent-execution-and-confirmation-lifecycle.md`
 - `docs/api/agent-interface.md`
 - `docs/api/banking-api-contract.md`
-- `docs/api/mcp-tool-contracts.md`
+- `docs/api/agent-tool-contracts.md`
 - `docs/flows/customer-verification-flow.mmd`
 - `docs/flows/confirmation-and-execution-flow.mmd`
 - `docs/flows/banking-tool-execution-flow.mmd`

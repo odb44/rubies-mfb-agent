@@ -1,9 +1,9 @@
 # Threat Model and Security Controls
 
-- **Status:** Design draft
+- **Status:Final
 - **Scope:** Threats and controls for the Rubies MFB Customer Support Agent
 - **Related design:** `docs/security/security-model.md`
-- **Related decisions:** ADR-006 (MCP and Authorization); ADR-008 (Agent Execution and Confirmation Lifecycle)
+- **Related decisions:** ADR-009 (Direct Agent Tool Execution); ADR-008; ADR-006 (historical, superseded) (Agent Execution and Confirmation Lifecycle)
 - **Implementation status:** Requirements only; implementation and test results must be recorded separately
 
 ## 1. Purpose
@@ -20,7 +20,7 @@ The threat list is scoped to the initial capstone system and its nine approved t
 | Customer, account, transaction, card, dispute, and loan records | Prevent unauthorized access, disclosure, or modification |
 | Verification state and factors | Prevent bypass or disclosure of verification controls |
 | Pending confirmations | Prevent forgery, replay, cross-session use, and action substitution |
-| Banking API and MCP tool boundary | Prevent unauthorized or unregistered operations |
+| Banking API and agent tool boundary | Prevent unauthorized or unregistered operations |
 | Synthetic customer dataset and knowledge documents | Preserve integrity and prevent untrusted content from becoming executable authority |
 | Audit events and tool-call logs | Preserve useful traceability without exposing secrets or unnecessary personal data |
 | Loan-model artifacts and outputs | Prevent unauthorized artifact changes and unsupported claims about eligibility |
@@ -31,9 +31,9 @@ The threat list is scoped to the initial capstone system and its nine approved t
 
 1. **Customer ↔ Agent API:** Incoming messages and user-provided identifiers are untrusted input.
 2. **Agent orchestration ↔ tool router:** Model-proposed tool calls are requests, not authorization decisions.
-3. **Agent/tool router ↔ MCP server:** Tool access must be authenticated and authorized according to the configured integration design.
-4. **MCP server ↔ Banking API:** The Banking API/service must independently validate identity context, ownership, permissions, business rules, and action requirements.
-5. **Banking API ↔ PostgreSQL:** Database access is restricted to trusted service code and approved migrations; the model and MCP tools do not access banking tables directly.
+3. **Agent/tool router ↔ agent tool runtime:** Tool access must be authenticated and authorized according to the configured integration design.
+4. **agent tool runtime ↔ Banking API:** The Banking API/service must independently validate identity context, ownership, permissions, business rules, and action requirements.
+5. **Banking API ↔ PostgreSQL:** Database access is restricted to trusted service code and approved migrations; the model and agent tools do not access banking tables directly.
 6. **Agent ↔ knowledge base/model artifacts:** Retrieved documents and model artifacts are data inputs and must be integrity-controlled; retrieved text cannot override system policy.
 7. **Agent ↔ session and confirmation storage:** Session files and pending-action records require access controls and must not be treated as interchangeable stores.
 8. **Agent ↔ human-support destination:** Handoff data must be minimized, and delivery outcomes must be represented honestly.
@@ -46,7 +46,7 @@ The threat list is scoped to the initial capstone system and its nine approved t
 | TM-02 | Model-generated arguments attempt to override trusted identity | Agent acts under an attacker-selected customer context | Never treat model-supplied identity fields as authoritative; validate or reject unexpected identity fields at tool boundary | Inject a different customer ID into proposed tool arguments; assert trusted session binding wins or call is rejected |
 | TM-03 | Prompt injection in customer messages or retrieved documents | Policy bypass, unauthorized tool use, data leakage | Treat user/retrieved text as untrusted data; keep authorization in backend; use explicit tool schemas and allowlist | Include instructions to ignore policy or reveal another customer's data in user text and indexed documents; assert denial and no unauthorized tool call |
 | TM-04 | Unregistered or malformed tool invocation | Unauthorized behavior, validation bypass, service instability | Allowlist the nine tools; validate strict input schemas; reject unknown operations before execution | Invoke unknown tool names, missing fields, invalid types, oversized values, and unexpected identity/permission fields |
-| TM-05 | MCP boundary bypass or direct database access | Circumvention of service rules and audit controls | MCP exposes registered tools only; no direct database access; Banking API re-enforces ownership and business rules | Verify MCP tool implementations call approved service/API paths; test direct requests without valid authorization and attempt forbidden DB access in integration setup |
+| TM-05 | agent tool boundary bypass or direct database access | Circumvention of service rules and audit controls | Agent exposes registered tools only; no direct database access; Banking API re-enforces ownership and business rules | Verify agent tool implementations call approved service/API paths; test direct requests without valid authorization and attempt forbidden DB access in integration setup |
 | TM-06 | Confirmation forgery or reference guessing | Unauthorized state change | Generate unguessable references; bind pending action to trusted customer/session and exact action details; validate on approval | Submit nonexistent, altered, and another customer's confirmation references; assert no operation occurs |
 | TM-07 | Confirmation replay or concurrent duplicate approval | Duplicate dispute/card operation or repeated side effect | Expiry, atomic single-use consumption, stable idempotency key, persisted lifecycle state | Reuse a consumed confirmation and send concurrent approval requests; assert at most one logical operation |
 | TM-08 | Action substitution after approval request | Customer approves one action but a different action executes | Store canonical action details server-side; compare approved action with pending record; material changes require new confirmation | Alter target or material fields after preparation; assert the original confirmation cannot authorize the changed action |
@@ -78,8 +78,8 @@ These are design-priority groupings, not measured risk scores. A formal likeliho
 | Control area | Primary enforcement point | Supporting enforcement / evidence |
 |---|---|---|
 | Trusted identity and session binding | Agent API/security layer | Banking API validates trusted context |
-| Resource ownership and banking permissions | Banking API/service layer | MCP authorization and security audit |
-| Tool allowlist and input schema | Tool registry/router and MCP server | Contract tests |
+| Resource ownership and banking permissions | Banking API/service layer | agent tool input validation and security audit |
+| Tool allowlist and input schema | Tool registry/router and agent tool runtime | Contract tests |
 | Verification and step-up requirements | Security/backend services | Confirmation resolution rechecks current state |
 | Confirmation lifecycle and idempotency | Banking backend confirmation/execution services | Persistent records, audit events, concurrency tests |
 | Sensitive-data minimization | Tool response schemas, response builder, logging/handoff adapters | Redaction tests and access controls |
@@ -94,7 +94,7 @@ The security design should not be considered implemented until tests demonstrate
 
 1. No tested path can use model-supplied identity to access a different customer's records.
 2. Every customer-scoped banking operation enforces resource ownership and authorization server-side.
-3. The MCP boundary exposes only registered tools and cannot access banking tables directly.
+3. The agent tool boundary exposes only registered tools and cannot access banking tables directly.
 4. Confirmation-required actions cannot execute before approval and cannot be replayed or altered after approval.
 5. Indeterminate state-changing outcomes are reconciled without blind retries or unsupported claims.
 6. Prompt injection cannot grant permissions, change customer binding, or bypass confirmation.
@@ -124,7 +124,7 @@ Resolve these in the relevant API/security/observability documents. Do not weake
 - `docs/adr/ADR-008-agent-execution-and-confirmation-lifecycle.md`
 - `docs/api/agent-interface.md`
 - `docs/api/banking-api-contract.md`
-- `docs/api/mcp-tool-contracts.md`
+- `docs/api/agent-tool-contracts.md`
 - `docs/flows/customer-verification-flow.mmd`
 - `docs/flows/confirmation-and-execution-flow.mmd`
 - `docs/flows/banking-tool-execution-flow.mmd`
