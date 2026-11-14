@@ -99,3 +99,7 @@ Test locations include:
 Architecture decisions and supporting documentation are maintained in `docs/README.md`.
 
 See ADR-009 for the current direct-agent-tool architecture and the associated security boundary decisions.
+
+
+## Author
+### Bamigbele Oluwaseun
